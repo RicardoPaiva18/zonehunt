@@ -1,9 +1,17 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { leaveGame } from '../../lib/gameService';
 import { Colors, Spacing, Typography } from '../../constants/theme';
 
 export default function AreaScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
+
+  const handleLeave = async () => {
+    if (code) {
+      await leaveGame(code);
+    }
+    router.replace('/');
+  };
 
   return (
     <View style={styles.container}>
@@ -11,11 +19,8 @@ export default function AreaScreen() {
       <Text style={styles.subtitle}>(em construção)</Text>
       <Text style={styles.code}>Código: {code}</Text>
 
-      <Pressable
-        style={styles.button}
-        onPress={() => router.replace('/')}
-      >
-        <Text style={styles.buttonText}>VOLTAR AO MENU</Text>
+      <Pressable style={styles.button} onPress={handleLeave}>
+        <Text style={styles.buttonText}>SAIR DO JOGO</Text>
       </Pressable>
     </View>
   );
