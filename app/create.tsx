@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { signInAnonymously } from 'firebase/auth';
-import { auth } from '../lib/firebase';
 import { createGame } from '../lib/gameService';
 import { Colors, Spacing, Typography, GameConfig } from '../constants/theme';
 
@@ -13,14 +11,6 @@ export default function CreateGameScreen() {
   const [gameCode, setGameCode] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // Garantir que o utilizador está autenticado ao abrir o ecrã
-  useEffect(() => {
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch((err) => {
-        console.error('Erro a autenticar:', err);
-      });
-    }
-  }, []);
 
   const handleCreate = async () => {
     if (!gameName.trim()) {

@@ -1,8 +1,45 @@
-import { router } from "expo-router";
-import { Pressable, StyleSheet, Text, View } from "react-native";
-import { Colors, Spacing, Typography } from "../constants/theme";
+import { useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  ActivityIndicator,
+} from 'react-native';
+import { router } from 'expo-router';
+import {
+  findActiveGameForUser,
+  getRouteForGameStatus,
+} from '../lib/gameService';
+import { Colors, Spacing, Typography } from '../constants/theme';
 
 export default function HomeScreen() {
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const activeGame = await findActiveGameForUser();
+        if (activeGame) {
+          router.replace(getRouteForGameStatus(activeGame));
+          return;
+        }
+      } catch (e) {
+        console.error('Erro a procurar jogo ativo:', e);
+      }
+      setChecking(false);
+    })();
+  }, []);
+
+  if (checking) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator color={Colors.primary} size="large" />
+        <Text style={styles.checkingLabel}>A verificar...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -15,21 +52,15 @@ export default function HomeScreen() {
 
       <View style={styles.buttons}>
         <Pressable
-          style={({ pressed }) => [
-            styles.primaryButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => router.push("/create")}
+          style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+          onPress={() => router.push('/create')}
         >
           <Text style={styles.primaryButtonText}>⊕ CRIAR JOGO</Text>
         </Pressable>
 
         <Pressable
-          style={({ pressed }) => [
-            styles.secondaryButton,
-            pressed && styles.pressed,
-          ]}
-          onPress={() => router.push("/join")}
+          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          onPress={() => router.push('/join')}
         >
           <Text style={styles.secondaryButtonText}>⊞ ENTRAR NUM JOGO</Text>
         </Pressable>
@@ -43,20 +74,27 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
     padding: Spacing.xl,
-    justifyContent: "space-between",
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  checkingLabel: {
+    ...Typography.caption,
+    color: Colors.textMuted,
+    marginTop: Spacing.md,
+    letterSpacing: 2,
   },
   header: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   logo: {
     width: 80,
     height: 80,
     borderRadius: 20,
     backgroundColor: Colors.primary,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: Spacing.lg,
   },
   logoText: {
@@ -76,6 +114,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   buttons: {
+    width: '100%',
     gap: Spacing.sm,
     paddingBottom: Spacing.xl,
   },
@@ -83,7 +122,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,
-    alignItems: "center",
+    alignItems: 'center',
   },
   primaryButtonText: {
     ...Typography.label,
@@ -94,7 +133,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
     borderRadius: 8,
-    alignItems: "center",
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
   },

@@ -7,10 +7,13 @@ import {
   collection,
   onSnapshot,
   getDocs,
+  query,
+  where,
+  limit,
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { db } from './firebase';
+import { getPlayerId } from './playerIdentity';
 import type { Game, GameStatus, PlayerColor, Player } from '../types/game';
-
 
 /**
  * Gera um código de jogo legível no formato G-XXX-XXXX.
@@ -39,10 +42,7 @@ export async function createGame(
   maxPlayers: number,
   playerName: string
 ): Promise<{ code: string; gameId: string }> {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('Utilizador não autenticado');
-  }
+  const userId = await getPlayerId();
 
   // Tenta gerar um código único (até 5 tentativas, para evitar colisões raras)
   let code = '';
@@ -63,7 +63,7 @@ export async function createGame(
     code,
     name: gameName,
     status: 'waiting' as GameStatus,
-    adminId: user.uid,
+    adminId: userId,
     maxPlayers,
     dollsPerPlayer: 2,
     area: null,
@@ -76,8 +76,8 @@ export async function createGame(
   await setDoc(doc(db, 'games', code), gameData);
 
   // Adicionar o criador como primeiro jogador (com cor verde)
-  await setDoc(doc(db, 'games', code, 'players', user.uid), {
-    id: user.uid,
+  await setDoc(doc(db, 'games', code, 'players', userId), {
+    id: userId,
     name: playerName,
     color: PLAYER_COLOR_ORDER[0],
     location: null,
@@ -89,8 +89,6 @@ export async function createGame(
 
   return { code, gameId: code };
 }
-
-
 
 /**
  * Subscreve às mudanças de um jogo em tempo real.
@@ -141,10 +139,7 @@ export function subscribeToPlayers(
  * Falha se o jogo não existir, já estiver a decorrer, ou estiver cheio.
  */
 export async function joinGame(code: string, playerName: string): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('Utilizador não autenticado');
-  }
+  const userId = await getPlayerId();
 
   const normalizedCode = code.trim().toUpperCase();
   const gameRef = doc(db, 'games', normalizedCode);
@@ -169,7 +164,7 @@ export async function joinGame(code: string, playerName: string): Promise<void> 
   }
 
   // Se o utilizador já está no jogo, não adicionar outra vez
-  if (existingPlayers.some((p) => p.id === user.uid)) {
+  if (existingPlayers.some((p) => p.id === userId)) {
     return;
   }
 
@@ -180,8 +175,8 @@ export async function joinGame(code: string, playerName: string): Promise<void> 
     throw new Error('Sem cores disponíveis.');
   }
 
-  await setDoc(doc(db, 'games', normalizedCode, 'players', user.uid), {
-    id: user.uid,
+  await setDoc(doc(db, 'games', normalizedCode, 'players', userId), {
+    id: userId,
     name: playerName,
     color: nextColor,
     location: null,
@@ -191,7 +186,6 @@ export async function joinGame(code: string, playerName: string): Promise<void> 
     joinedAt: Date.now(),
   });
 }
-
 
 /**
  * Muda o estado do jogo (ex: waiting -> placing).
@@ -206,7 +200,52 @@ export async function updateGameStatus(code: string, status: GameStatus): Promis
  * Se o admin sair, o jogo fica órfão (trataremos disto mais tarde).
  */
 export async function leaveGame(code: string): Promise<void> {
-  const user = auth.currentUser;
-  if (!user) return;
-  await deleteDoc(doc(db, 'games', code, 'players', user.uid));
+  const userId = await getPlayerId();
+  await deleteDoc(doc(db, 'games', code, 'players', userId));
+}
+
+/**
+ * Encontra um jogo ativo (não terminado) onde o utilizador atual é jogador.
+ * Retorna null se não houver nenhum.
+ *
+ * Nota: o Firestore não permite queries a subcoleções diferentes em simultâneo
+ * com uma API direta. Em vez disso, vamos iterar sobre jogos não terminados
+ * e verificar se o utilizador é jogador. Para o volume académico, isto é aceitável.
+ */
+export async function findActiveGameForUser(): Promise<Game | null> {
+  const userId = await getPlayerId();
+
+  // Procurar jogos que ainda não terminaram
+  const q = query(
+    collection(db, 'games'),
+    where('status', 'in', ['waiting', 'placing', 'playing']),
+    limit(20)
+  );
+
+  const gamesSnap = await getDocs(q);
+
+  for (const gameDoc of gamesSnap.docs) {
+    const playerDoc = await getDoc(doc(db, 'games', gameDoc.id, 'players', userId));
+    if (playerDoc.exists()) {
+      return { id: gameDoc.id, ...gameDoc.data() } as Game;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Decide para onde o utilizador deve ser redirecionado, com base no estado do jogo.
+ */
+export function getRouteForGameStatus(game: Game): string {
+  switch (game.status) {
+    case 'waiting':
+      return `/game/lobby?code=${game.code}`;
+    case 'placing':
+      return `/game/area?code=${game.code}`;
+    case 'playing':
+      return `/game/area?code=${game.code}`; // substituiremos por /game/play quando existir
+    default:
+      return '/';
+  }
 }

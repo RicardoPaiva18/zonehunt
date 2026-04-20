@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert, ScrollView } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
-import { auth } from '../../lib/firebase';
 import {
   subscribeToGame,
   subscribeToPlayers,
   updateGameStatus,
   leaveGame,
 } from '../../lib/gameService';
+import { getPlayerId } from '../../lib/playerIdentity';
 import { Colors, Spacing, Typography } from '../../constants/theme';
 import type { Game, Player } from '../../types/game';
 
@@ -15,7 +15,13 @@ export default function LobbyScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
+
+  // Carregar o ID do jogador atual
+  useEffect(() => {
+    getPlayerId().then(setCurrentUserId);
+  }, []);
 
   // Subscrever ao jogo e jogadores em tempo real
   useEffect(() => {
@@ -36,7 +42,6 @@ export default function LobbyScreen() {
     };
   }, [code]);
 
-  const currentUserId = auth.currentUser?.uid;
   const isAdmin = game?.adminId === currentUserId;
   const canStart = players.length >= 2; // mínimo 2 jogadores
 

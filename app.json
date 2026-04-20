@@ -9,7 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "config": {
+        "googleMapsApiKey": "AIzaSyDddmeDqQiAt0gk9HPmtmQDPkQSPvbdouA"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "O ZoneHunt precisa da tua localização para te mostrar no mapa e permitir o jogo baseado em proximidade."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -19,7 +25,16 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyDddmeDqQiAt0gk9HPmtmQDPkQSPvbdouA"
+        }
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "output": "static",
@@ -37,6 +52,12 @@
           "dark": {
             "backgroundColor": "#000000"
           }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "O ZoneHunt precisa da tua localização para te mostrar no mapa e detetar bonecos próximos."
         }
       ]
     ],

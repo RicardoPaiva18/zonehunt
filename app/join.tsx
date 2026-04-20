@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
-import { signInAnonymously } from 'firebase/auth';
-import { auth } from '../lib/firebase';
 import { subscribeToGame, subscribeToPlayers, joinGame } from '../lib/gameService';
 import { Colors, Spacing, Typography, GameConfig } from '../constants/theme';
 import type { Game, Player } from '../types/game';
@@ -13,12 +11,6 @@ export default function JoinGameScreen() {
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [joining, setJoining] = useState(false);
-
-  useEffect(() => {
-    if (!auth.currentUser) {
-      signInAnonymously(auth).catch(console.error);
-    }
-  }, []);
 
   // Quando o código tiver o comprimento certo, começa a espreitar o jogo em tempo real
   useEffect(() => {
