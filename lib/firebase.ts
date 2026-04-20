@@ -1,9 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
-import { initializeAuth, getAuth } from 'firebase/auth';
-// @ts-ignore - getReactNativePersistence exists at runtime but is missing from type definitions
-import { getReactNativePersistence } from 'firebase/auth';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { initializeFirestore } from 'firebase/firestore';
+import { initializeAuth, getAuth, browserLocalPersistence } from 'firebase/auth';
+import { Platform } from 'react-native';
 
 const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
@@ -16,12 +14,28 @@ const firebaseConfig = {
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
 
-// initializeAuth só pode ser chamado uma vez; se já existir, usa o existente
-export const auth = getApps().length === 1
-  ? initializeAuth(app, {
-      persistence: getReactNativePersistence(AsyncStorage),
-    })
-  : getAuth(app);
+// Persistência depende da plataforma:
+// - Web: browserLocalPersistence (usa localStorage)
+// - Mobile: AsyncStorage via getReactNativePersistence
+function createAuth() {
+  if (Platform.OS === 'web') {
+    return initializeAuth(app, { persistence: browserLocalPersistence });
+  }
 
-export const db = getFirestore(app);
+  // Imports de React Native só executam fora de web
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { getReactNativePersistence } = require('firebase/auth');
+  return initializeAuth(app, {
+    persistence: getReactNativePersistence(AsyncStorage),
+  });
+}
+
+export const auth = getApps().length === 1 ? createAuth() : getAuth(app);
+
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+});
+
 export default app;

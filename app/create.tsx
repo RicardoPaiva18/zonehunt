@@ -34,11 +34,8 @@ export default function CreateGameScreen() {
 
     setCreating(true);
     try {
-      const { code } = await createGame(gameName.trim(), maxPlayers, playerName.trim());
-      setGameCode(code);
-      // Navegar para o lobby (a criar mais tarde)
-      Alert.alert('Jogo criado!', `Código: ${code}\n\nPartilha este código com os teus amigos.`);
-      router.back();
+    const { code } = await createGame(gameName.trim(), maxPlayers, playerName.trim());
+    router.replace(`/game/lobby?code=${code}`);
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Algo correu mal.');
     } finally {

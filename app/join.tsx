@@ -51,9 +51,8 @@ export default function JoinGameScreen() {
 
     setJoining(true);
     try {
-      await joinGame(code, playerName.trim());
-      Alert.alert('Sucesso!', 'Entraste no jogo.');
-      router.back();
+    await joinGame(code, playerName.trim());
+    router.replace(`/game/lobby?code=${code.trim().toUpperCase()}`);
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Algo correu mal.');
     } finally {

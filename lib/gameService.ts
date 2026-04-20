@@ -2,7 +2,8 @@ import {
   doc,
   setDoc,
   getDoc,
-  serverTimestamp,
+  updateDoc,
+  deleteDoc,
   collection,
   onSnapshot,
   getDocs,
@@ -189,4 +190,23 @@ export async function joinGame(code: string, playerName: string): Promise<void> 
     isAdmin: false,
     joinedAt: Date.now(),
   });
+}
+
+
+/**
+ * Muda o estado do jogo (ex: waiting -> placing).
+ * Só deve ser chamado pelo admin.
+ */
+export async function updateGameStatus(code: string, status: GameStatus): Promise<void> {
+  await updateDoc(doc(db, 'games', code), { status });
+}
+
+/**
+ * Remove o jogador atual do jogo.
+ * Se o admin sair, o jogo fica órfão (trataremos disto mais tarde).
+ */
+export async function leaveGame(code: string): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  await deleteDoc(doc(db, 'games', code, 'players', user.uid));
 }
