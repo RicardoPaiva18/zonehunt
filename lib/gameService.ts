@@ -235,6 +235,17 @@ export async function findActiveGameForUser(): Promise<Game | null> {
 }
 
 /**
+ * Atualiza a localização do jogador atual no jogo.
+ */
+export async function updatePlayerLocation(
+  code: string,
+  location: { latitude: number; longitude: number }
+): Promise<void> {
+  const userId = await getPlayerId();
+  await updateDoc(doc(db, 'games', code, 'players', userId), { location });
+}
+
+/**
  * Decide para onde o utilizador deve ser redirecionado, com base no estado do jogo.
  */
 export function getRouteForGameStatus(game: Game): string {
