@@ -11,7 +11,7 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import type { Game, GameStatus, Player, PlayerColor } from "../types/game";
+import type { Game, GameStatus, PlayerColor, Player, Doll } from '../types/game';
 import { db } from "./firebase";
 import { getPlayerId } from "./playerIdentity";
 
@@ -280,18 +280,137 @@ export async function updateGameArea(
 }
 
 /**
+ * Verifica se um ponto está dentro de um polígono (ray casting algorithm).
+ * Usamos isto para validar que os bonecos são colocados dentro da área.
+ */
+export function isPointInPolygon(
+  point: { latitude: number; longitude: number },
+  polygon: { latitude: number; longitude: number }[]
+): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].latitude;
+    const yi = polygon[i].longitude;
+    const xj = polygon[j].latitude;
+    const yj = polygon[j].longitude;
+
+    const intersect =
+      yi > point.longitude !== yj > point.longitude &&
+      point.latitude < ((xj - xi) * (point.longitude - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * Adiciona um boneco à coleção de bonecos do jogo.
+ */
+export async function placeDoll(
+  code: string,
+  location: { latitude: number; longitude: number }
+): Promise<void> {
+  const userId = await getPlayerId();
+
+  // Ir buscar o jogador para saber a cor
+  const playerSnap = await getDoc(doc(db, 'games', code, 'players', userId));
+  if (!playerSnap.exists()) {
+    throw new Error('Jogador não encontrado no jogo.');
+  }
+  const player = playerSnap.data() as Player;
+
+  // Criar documento de boneco na subcoleção 'dolls'
+  const dollId = `${userId}_${Date.now()}`;
+  await setDoc(doc(db, 'games', code, 'dolls', dollId), {
+    id: dollId,
+    ownerId: userId,
+    ownerColor: player.color,
+    location,
+    capturedBy: null,
+    capturedAt: null,
+  });
+
+  // Incrementar o contador de bonecos colocados no perfil do jogador
+  await updateDoc(doc(db, 'games', code, 'players', userId), {
+    dollsPlaced: (player.dollsPlaced ?? 0) + 1,
+  });
+}
+
+/**
+ * Remove o último boneco colocado pelo jogador atual.
+ */
+export async function undoLastDoll(code: string): Promise<void> {
+  const userId = await getPlayerId();
+
+  // Ir buscar todos os bonecos deste jogador
+  const dollsSnap = await getDocs(
+    query(
+      collection(db, 'games', code, 'dolls'),
+      where('ownerId', '==', userId)
+    )
+  );
+
+  if (dollsSnap.empty) return;
+
+  // Ordenar pelo mais recente (o ID contém o timestamp)
+  const sorted = dollsSnap.docs.sort((a, b) => b.id.localeCompare(a.id));
+  const lastDoll = sorted[0];
+
+  await deleteDoc(lastDoll.ref);
+
+  // Decrementar contador
+  const playerSnap = await getDoc(doc(db, 'games', code, 'players', userId));
+  if (playerSnap.exists()) {
+    const player = playerSnap.data() as Player;
+    await updateDoc(doc(db, 'games', code, 'players', userId), {
+      dollsPlaced: Math.max(0, (player.dollsPlaced ?? 1) - 1),
+    });
+  }
+}
+
+/**
+ * Subscreve aos bonecos do jogador atual em tempo real.
+ * Cada jogador só vê os próprios bonecos no ecrã.
+ */
+export function subscribeToMyDolls(
+  code: string,
+  onUpdate: (dolls: Doll[]) => void
+) {
+  return (async () => {
+    const userId = await getPlayerId();
+    return onSnapshot(
+      query(
+        collection(db, 'games', code, 'dolls'),
+        where('ownerId', '==', userId)
+      ),
+      (snapshot) => {
+        const dolls = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Doll);
+        onUpdate(dolls);
+      },
+      (error) => {
+        console.error('Erro a subscrever aos bonecos:', error);
+        onUpdate([]);
+      }
+    );
+  })();
+}
+
+/**
  * Decide para onde o utilizador deve ser redirecionado, com base no estado do jogo.
  */
 export function getRouteForGameStatus(game: Game): string {
   switch (game.status) {
-    case "waiting":
+    case 'waiting':
       return `/game/lobby?code=${game.code}`;
-    case "placing":
+    case 'placing':
+      // Se a área já foi confirmada, estamos na fase de colocar bonecos
+      if (game.areaConfirmed) {
+        return `/game/place?code=${game.code}`;
+      }
       return `/game/area?code=${game.code}`;
-    case "playing":
-      return `/game/area?code=${game.code}`; // substituiremos por /game/play quando existir
+    case 'playing':
+      return `/game/place?code=${game.code}`; // temporário até ter /game/play
     default:
-      return "/";
+      return '/';
   }
 }
 

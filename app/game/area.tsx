@@ -42,7 +42,14 @@ export default function AreaScreen() {
   // Subscrever ao jogo e jogadores
   useEffect(() => {
     if (!code) return;
-    const unsubGame = subscribeToGame(code, setGame);
+    const unsubGame = subscribeToGame(code, (g) => {
+      setGame(g);
+      // Quando o admin confirmar a área, todos navegam para colocar bonecos
+      if (g?.areaConfirmed && code) {
+        router.replace(`/game/place?code=${code}`);
+      }
+    });
+
     const unsubPlayers = subscribeToPlayers(code, setPlayers);
     return () => {
       unsubGame();
