@@ -36,6 +36,7 @@ export type Game = {
   maxPlayers: number;
   dollsPerPlayer: number;
   area: Coordinate[] | null;
+  areaConfirmed: boolean;
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;

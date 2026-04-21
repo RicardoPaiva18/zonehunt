@@ -1,28 +1,31 @@
 import {
-  doc,
-  setDoc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
   collection,
-  onSnapshot,
+  deleteDoc,
+  doc,
+  getDoc,
   getDocs,
-  query,
-  where,
   limit,
-} from 'firebase/firestore';
-import { db } from './firebase';
-import { getPlayerId } from './playerIdentity';
-import type { Game, GameStatus, PlayerColor, Player } from '../types/game';
+  onSnapshot,
+  query,
+  setDoc,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+import type { Game, GameStatus, Player, PlayerColor } from "../types/game";
+import { db } from "./firebase";
+import { getPlayerId } from "./playerIdentity";
 
 /**
  * Gera um código de jogo legível no formato G-XXX-XXXX.
  * Evita caracteres ambíguos (0/O, 1/I/L).
  */
 function generateGameCode(): string {
-  const chars = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   const random = (length: number) =>
-    Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
+    Array.from(
+      { length },
+      () => chars[Math.floor(Math.random() * chars.length)],
+    ).join("");
   return `G-${random(3)}-${random(4)}`;
 }
 
@@ -30,7 +33,14 @@ function generateGameCode(): string {
  * Cores disponíveis para jogadores, atribuídas por ordem de entrada.
  */
 const PLAYER_COLOR_ORDER: PlayerColor[] = [
-  'green', 'orange', 'blue', 'purple', 'red', 'yellow', 'pink', 'cyan',
+  "green",
+  "orange",
+  "blue",
+  "purple",
+  "red",
+  "yellow",
+  "pink",
+  "cyan",
 ];
 
 /**
@@ -40,43 +50,44 @@ const PLAYER_COLOR_ORDER: PlayerColor[] = [
 export async function createGame(
   gameName: string,
   maxPlayers: number,
-  playerName: string
+  playerName: string,
 ): Promise<{ code: string; gameId: string }> {
   const userId = await getPlayerId();
 
   // Tenta gerar um código único (até 5 tentativas, para evitar colisões raras)
-  let code = '';
+  let code = "";
   for (let attempt = 0; attempt < 5; attempt++) {
     const candidate = generateGameCode();
-    const existing = await getDoc(doc(db, 'games', candidate));
+    const existing = await getDoc(doc(db, "games", candidate));
     if (!existing.exists()) {
       code = candidate;
       break;
     }
   }
   if (!code) {
-    throw new Error('Não foi possível gerar um código único. Tenta de novo.');
+    throw new Error("Não foi possível gerar um código único. Tenta de novo.");
   }
 
   // Criar o documento do jogo
-  const gameData: Omit<Game, 'id'> = {
+  const gameData: Omit<Game, "id"> = {
     code,
     name: gameName,
-    status: 'waiting' as GameStatus,
+    status: "waiting" as GameStatus,
     adminId: userId,
     maxPlayers,
     dollsPerPlayer: 2,
     area: null,
+    areaConfirmed: false,
     createdAt: Date.now(),
     startedAt: null,
     finishedAt: null,
     winnerId: null,
   };
 
-  await setDoc(doc(db, 'games', code), gameData);
+  await setDoc(doc(db, "games", code), gameData);
 
   // Adicionar o criador como primeiro jogador (com cor verde)
-  await setDoc(doc(db, 'games', code, 'players', userId), {
+  await setDoc(doc(db, "games", code, "players", userId), {
     id: userId,
     name: playerName,
     color: PLAYER_COLOR_ORDER[0],
@@ -96,10 +107,10 @@ export async function createGame(
  */
 export function subscribeToGame(
   code: string,
-  onUpdate: (game: Game | null) => void
+  onUpdate: (game: Game | null) => void,
 ) {
   return onSnapshot(
-    doc(db, 'games', code),
+    doc(db, "games", code),
     (snapshot) => {
       if (!snapshot.exists()) {
         onUpdate(null);
@@ -108,9 +119,9 @@ export function subscribeToGame(
       onUpdate({ id: snapshot.id, ...snapshot.data() } as Game);
     },
     (error) => {
-      console.error('Erro a subscrever ao jogo:', error);
+      console.error("Erro a subscrever ao jogo:", error);
       onUpdate(null);
-    }
+    },
   );
 }
 
@@ -119,18 +130,20 @@ export function subscribeToGame(
  */
 export function subscribeToPlayers(
   code: string,
-  onUpdate: (players: Player[]) => void
+  onUpdate: (players: Player[]) => void,
 ) {
   return onSnapshot(
-    collection(db, 'games', code, 'players'),
+    collection(db, "games", code, "players"),
     (snapshot) => {
-      const players = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Player);
+      const players = snapshot.docs.map(
+        (d) => ({ id: d.id, ...d.data() }) as Player,
+      );
       onUpdate(players);
     },
     (error) => {
-      console.error('Erro a subscrever aos jogadores:', error);
+      console.error("Erro a subscrever aos jogadores:", error);
       onUpdate([]);
-    }
+    },
   );
 }
 
@@ -138,29 +151,34 @@ export function subscribeToPlayers(
  * Adiciona o utilizador atual como jogador num jogo existente.
  * Falha se o jogo não existir, já estiver a decorrer, ou estiver cheio.
  */
-export async function joinGame(code: string, playerName: string): Promise<void> {
+export async function joinGame(
+  code: string,
+  playerName: string,
+): Promise<void> {
   const userId = await getPlayerId();
 
   const normalizedCode = code.trim().toUpperCase();
-  const gameRef = doc(db, 'games', normalizedCode);
+  const gameRef = doc(db, "games", normalizedCode);
   const gameSnap = await getDoc(gameRef);
 
   if (!gameSnap.exists()) {
-    throw new Error('Jogo não encontrado. Verifica o código.');
+    throw new Error("Jogo não encontrado. Verifica o código.");
   }
 
   const game = gameSnap.data() as Game;
 
-  if (game.status !== 'waiting') {
-    throw new Error('Este jogo já começou.');
+  if (game.status !== "waiting") {
+    throw new Error("Este jogo já começou.");
   }
 
   // Buscar jogadores existentes para escolher cor e validar lotação
-  const playersSnap = await getDocs(collection(db, 'games', normalizedCode, 'players'));
+  const playersSnap = await getDocs(
+    collection(db, "games", normalizedCode, "players"),
+  );
   const existingPlayers = playersSnap.docs.map((d) => d.data() as Player);
 
   if (existingPlayers.length >= game.maxPlayers) {
-    throw new Error('Este jogo já está cheio.');
+    throw new Error("Este jogo já está cheio.");
   }
 
   // Se o utilizador já está no jogo, não adicionar outra vez
@@ -172,10 +190,10 @@ export async function joinGame(code: string, playerName: string): Promise<void> 
   const usedColors = new Set(existingPlayers.map((p) => p.color));
   const nextColor = PLAYER_COLOR_ORDER.find((c) => !usedColors.has(c));
   if (!nextColor) {
-    throw new Error('Sem cores disponíveis.');
+    throw new Error("Sem cores disponíveis.");
   }
 
-  await setDoc(doc(db, 'games', normalizedCode, 'players', userId), {
+  await setDoc(doc(db, "games", normalizedCode, "players", userId), {
     id: userId,
     name: playerName,
     color: nextColor,
@@ -191,8 +209,11 @@ export async function joinGame(code: string, playerName: string): Promise<void> 
  * Muda o estado do jogo (ex: waiting -> placing).
  * Só deve ser chamado pelo admin.
  */
-export async function updateGameStatus(code: string, status: GameStatus): Promise<void> {
-  await updateDoc(doc(db, 'games', code), { status });
+export async function updateGameStatus(
+  code: string,
+  status: GameStatus,
+): Promise<void> {
+  await updateDoc(doc(db, "games", code), { status });
 }
 
 /**
@@ -201,7 +222,7 @@ export async function updateGameStatus(code: string, status: GameStatus): Promis
  */
 export async function leaveGame(code: string): Promise<void> {
   const userId = await getPlayerId();
-  await deleteDoc(doc(db, 'games', code, 'players', userId));
+  await deleteDoc(doc(db, "games", code, "players", userId));
 }
 
 /**
@@ -217,15 +238,17 @@ export async function findActiveGameForUser(): Promise<Game | null> {
 
   // Procurar jogos que ainda não terminaram
   const q = query(
-    collection(db, 'games'),
-    where('status', 'in', ['waiting', 'placing', 'playing']),
-    limit(20)
+    collection(db, "games"),
+    where("status", "in", ["waiting", "placing", "playing"]),
+    limit(20),
   );
 
   const gamesSnap = await getDocs(q);
 
   for (const gameDoc of gamesSnap.docs) {
-    const playerDoc = await getDoc(doc(db, 'games', gameDoc.id, 'players', userId));
+    const playerDoc = await getDoc(
+      doc(db, "games", gameDoc.id, "players", userId),
+    );
     if (playerDoc.exists()) {
       return { id: gameDoc.id, ...gameDoc.data() } as Game;
     }
@@ -239,10 +262,21 @@ export async function findActiveGameForUser(): Promise<Game | null> {
  */
 export async function updatePlayerLocation(
   code: string,
-  location: { latitude: number; longitude: number }
+  location: { latitude: number; longitude: number },
 ): Promise<void> {
   const userId = await getPlayerId();
-  await updateDoc(doc(db, 'games', code, 'players', userId), { location });
+  await updateDoc(doc(db, "games", code, "players", userId), { location });
+}
+
+/**
+ * Atualiza a área do jogo. Só o admin deve chamar isto.
+ * Guardar null "limpa" a área.
+ */
+export async function updateGameArea(
+  code: string,
+  area: { latitude: number; longitude: number }[] | null,
+): Promise<void> {
+  await updateDoc(doc(db, "games", code), { area });
 }
 
 /**
@@ -250,13 +284,20 @@ export async function updatePlayerLocation(
  */
 export function getRouteForGameStatus(game: Game): string {
   switch (game.status) {
-    case 'waiting':
+    case "waiting":
       return `/game/lobby?code=${game.code}`;
-    case 'placing':
+    case "placing":
       return `/game/area?code=${game.code}`;
-    case 'playing':
+    case "playing":
       return `/game/area?code=${game.code}`; // substituiremos por /game/play quando existir
     default:
-      return '/';
+      return "/";
   }
+}
+
+/**
+ * Marca a área como confirmada. Só deve ser chamado pelo admin.
+ */
+export async function confirmGameArea(code: string): Promise<void> {
+  await updateDoc(doc(db, "games", code), { areaConfirmed: true });
 }

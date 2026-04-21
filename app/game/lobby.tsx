@@ -1,15 +1,23 @@
-import { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert, ScrollView } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useState } from "react";
 import {
+  Alert,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import { Colors, Spacing, Typography } from "../../constants/theme";
+import {
+  leaveGame,
   subscribeToGame,
   subscribeToPlayers,
   updateGameStatus,
-  leaveGame,
-} from '../../lib/gameService';
-import { getPlayerId } from '../../lib/playerIdentity';
-import { Colors, Spacing, Typography } from '../../constants/theme';
-import type { Game, Player } from '../../types/game';
+} from "../../lib/gameService";
+import { getPlayerId } from "../../lib/playerIdentity";
+import type { Game, Player } from "../../types/game";
 
 export default function LobbyScreen() {
   const { code } = useLocalSearchParams<{ code: string }>();
@@ -30,7 +38,7 @@ export default function LobbyScreen() {
     const unsubGame = subscribeToGame(code, (g) => {
       setGame(g);
       // Se o jogo deixou de estar em 'waiting', avançar para o próximo ecrã
-      if (g && g.status === 'placing') {
+      if (g && g.status === "placing") {
         router.replace(`/game/area?code=${code}`);
       }
     });
@@ -49,32 +57,35 @@ export default function LobbyScreen() {
     if (!code || !canStart) return;
     setAdvancing(true);
     try {
-      await updateGameStatus(code, 'placing');
+      await updateGameStatus(code, "placing");
       // A subscrição vai automaticamente redirecionar para /game/area
     } catch (error: any) {
-      Alert.alert('Erro', error.message ?? 'Não foi possível começar o jogo.');
+      Alert.alert("Erro", error.message ?? "Não foi possível começar o jogo.");
       setAdvancing(false);
     }
   };
 
   const handleLeave = () => {
-    Alert.alert(
-      'Sair do jogo',
-      'Tens a certeza que queres sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sair',
-          style: 'destructive',
-          onPress: async () => {
-            if (code) {
-              await leaveGame(code);
-            }
-            router.replace('/');
-          },
-        },
-      ],
-    );
+    const performLeave = async () => {
+      if (code) await leaveGame(code);
+      router.replace("/");
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Tens a certeza que queres sair do jogo?")) {
+        performLeave();
+      }
+      return;
+    }
+
+    Alert.alert("Sair do jogo", "Tens a certeza que queres sair?", [
+      { text: "Cancelar", style: "cancel" },
+      {
+        text: "Sair",
+        style: "destructive",
+        onPress: performLeave,
+      },
+    ]);
   };
 
   // Estados de carregamento
@@ -95,11 +106,14 @@ export default function LobbyScreen() {
           <Text style={styles.code}>{game.code}</Text>
         </View>
         <Text style={styles.counter}>
-          JOGADORES  {players.length}/{game.maxPlayers}
+          JOGADORES {players.length}/{game.maxPlayers}
         </Text>
       </View>
 
-      <ScrollView style={styles.playerList} contentContainerStyle={styles.playerListContent}>
+      <ScrollView
+        style={styles.playerList}
+        contentContainerStyle={styles.playerListContent}
+      >
         {players.map((player) => {
           const colorHex = getPlayerColorHex(player.color);
           const isYou = player.id === currentUserId;
@@ -108,26 +122,29 @@ export default function LobbyScreen() {
               <View style={[styles.playerDot, { backgroundColor: colorHex }]} />
               <Text style={styles.playerName}>
                 {player.name}
-                {isYou && <Text style={styles.youLabel}>  (tu)</Text>}
+                {isYou && <Text style={styles.youLabel}> (tu)</Text>}
               </Text>
-              {player.isAdmin && (
-                <Text style={styles.adminBadge}>ADMIN</Text>
-              )}
+              {player.isAdmin && <Text style={styles.adminBadge}>ADMIN</Text>}
             </View>
           );
         })}
 
-        {Array.from({ length: game.maxPlayers - players.length }).map((_, i) => (
-          <View key={`empty-${i}`} style={styles.playerRowEmpty}>
-            <View style={styles.playerDotEmpty} />
-            <Text style={styles.playerNameEmpty}>À espera de jogador...</Text>
-          </View>
-        ))}
+        {Array.from({ length: game.maxPlayers - players.length }).map(
+          (_, i) => (
+            <View key={`empty-${i}`} style={styles.playerRowEmpty}>
+              <View style={styles.playerDotEmpty} />
+              <Text style={styles.playerNameEmpty}>À espera de jogador...</Text>
+            </View>
+          ),
+        )}
       </ScrollView>
 
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            pressed && styles.pressed,
+          ]}
           onPress={handleLeave}
         >
           <Text style={styles.secondaryButtonText}>SAIR</Text>
@@ -144,7 +161,7 @@ export default function LobbyScreen() {
             disabled={!canStart || advancing}
           >
             <Text style={styles.primaryButtonText}>
-              {canStart ? 'COMEÇAR →' : 'PRECISA DE 2+ JOGADORES'}
+              {canStart ? "COMEÇAR →" : "PRECISA DE 2+ JOGADORES"}
             </Text>
           </Pressable>
         ) : (
@@ -159,16 +176,16 @@ export default function LobbyScreen() {
 
 function getPlayerColorHex(color: string): string {
   const colors: Record<string, string> = {
-    green: '#4ade80',
-    orange: '#fb923c',
-    blue: '#60a5fa',
-    purple: '#c084fc',
-    red: '#f87171',
-    yellow: '#fbbf24',
-    pink: '#f472b6',
-    cyan: '#22d3ee',
+    green: "#4ade80",
+    orange: "#fb923c",
+    blue: "#60a5fa",
+    purple: "#c084fc",
+    red: "#f87171",
+    yellow: "#fbbf24",
+    pink: "#f472b6",
+    cyan: "#22d3ee",
   };
-  return colors[color] ?? '#71717a';
+  return colors[color] ?? "#71717a";
 }
 
 const styles = StyleSheet.create({
@@ -180,7 +197,7 @@ const styles = StyleSheet.create({
   loading: {
     ...Typography.body,
     color: Colors.textSecondary,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: Spacing.xxl,
   },
   header: {
@@ -198,7 +215,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.primary,
     marginBottom: Spacing.md,
-    alignItems: 'center',
+    alignItems: "center",
   },
   codeLabel: {
     ...Typography.caption,
@@ -225,8 +242,8 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   playerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.md,
     backgroundColor: Colors.surface,
     borderRadius: 8,
@@ -235,8 +252,8 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   playerRowEmpty: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.md,
     backgroundColor: Colors.surface,
     borderRadius: 8,
@@ -265,7 +282,7 @@ const styles = StyleSheet.create({
   playerNameEmpty: {
     ...Typography.body,
     color: Colors.textMuted,
-    fontStyle: 'italic',
+    fontStyle: "italic",
   },
   youLabel: {
     color: Colors.textMuted,
@@ -275,10 +292,10 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.primary,
     letterSpacing: 1,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
   footer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.sm,
     paddingBottom: Spacing.lg,
   },
@@ -287,8 +304,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   primaryButtonText: {
     ...Typography.label,
@@ -300,8 +317,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
     borderColor: Colors.border,
   },
