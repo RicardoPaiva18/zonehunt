@@ -452,3 +452,83 @@ export function randomPointInPolygon(
   }
   return null;
 }
+
+/**
+ * Subscreve a TODOS os bonecos do jogo em tempo real.
+ */
+export function subscribeToAllDolls(
+  code: string,
+  onUpdate: (dolls: Doll[]) => void
+) {
+  return onSnapshot(
+    collection(db, 'games', code, 'dolls'),
+    (snapshot) => {
+      const dolls = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }) as Doll);
+      onUpdate(dolls);
+    },
+    (error) => {
+      console.error('Erro a subscrever a bonecos:', error);
+      onUpdate([]);
+    }
+  );
+}
+
+/**
+ * Distância entre duas coordenadas em metros (Haversine).
+ */
+export function distanceBetween(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number }
+): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.latitude - a.latitude);
+  const dLon = toRad(b.longitude - a.longitude);
+  const lat1 = toRad(a.latitude);
+  const lat2 = toRad(b.latitude);
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+  const c = 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+  return R * c;
+}
+
+/**
+ * Calcula a área aproximada de um polígono em metros quadrados.
+ */
+export function polygonAreaSquareMeters(
+  polygon: { latitude: number; longitude: number }[]
+): number {
+  if (polygon.length < 3) return 0;
+
+  const avgLat = polygon.reduce((sum, p) => sum + p.latitude, 0) / polygon.length;
+  const metersPerDegLat = 111320;
+  const metersPerDegLon = 111320 * Math.cos((avgLat * Math.PI) / 180);
+
+  const projected = polygon.map((p) => ({
+    x: (p.longitude - polygon[0].longitude) * metersPerDegLon,
+    y: (p.latitude - polygon[0].latitude) * metersPerDegLat,
+  }));
+
+  let area = 0;
+  for (let i = 0; i < projected.length; i++) {
+    const j = (i + 1) % projected.length;
+    area += projected[i].x * projected[j].y;
+    area -= projected[j].x * projected[i].y;
+  }
+  return Math.abs(area) / 2;
+}
+
+/**
+ * Calcula o raio de deteção em metros, como 5% da área do polígono
+ * expresso em raio de círculo equivalente, com limites [8m, 50m].
+ */
+export function computeDetectionRadius(
+  polygon: { latitude: number; longitude: number }[]
+): number {
+  const area = polygonAreaSquareMeters(polygon);
+  if (area === 0) return 15;
+  const detectionArea = area * 0.05;
+  const radius = Math.sqrt(detectionArea / Math.PI);
+  return Math.max(8, Math.min(50, radius));
+}

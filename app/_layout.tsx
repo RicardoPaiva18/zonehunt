@@ -18,6 +18,7 @@ export default function RootLayout() {
       <Stack.Screen name="game/lobby" options={{ headerShown: false }} />
       <Stack.Screen name="game/area" options={{ headerShown: false }} />
       <Stack.Screen name="game/place" options={{ headerShown: false }} />
+      <Stack.Screen name="game/play" options={{ headerShown: false }} />
     </Stack>
   );
 }
