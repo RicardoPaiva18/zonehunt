@@ -13,6 +13,8 @@ import {
   placeDoll,
   undoLastDoll,
   isPointInPolygon,
+  updateGameStatus,
+  randomPointInPolygon,
 } from '../../lib/gameService';
 import { getPlayerId } from '../../lib/playerIdentity';
 import { Colors, Spacing, Typography } from '../../constants/theme';
@@ -33,6 +35,7 @@ export default function PlaceDollsScreen() {
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const mapRef = useRef<any>(null);
+  const autoPlacedRef = useRef(false);
 
   // ID do jogador
   useEffect(() => {
@@ -42,7 +45,13 @@ export default function PlaceDollsScreen() {
   // Subscrever ao jogo, jogadores e bonecos próprios
   useEffect(() => {
     if (!code) return;
-    const unsubGame = subscribeToGame(code, setGame);
+    const unsubGame = subscribeToGame(code, (g) => {
+      setGame(g);
+      // Quando o jogo passar a 'playing', todos navegam para /game/play
+      if (g?.status === 'playing' && code) {
+        router.replace(`/game/play?code=${code}`);
+      }
+    });
     const unsubPlayers = subscribeToPlayers(code, setPlayers);
 
     let unsubDolls: (() => void) | null = null;
@@ -120,6 +129,31 @@ export default function PlaceDollsScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
+  // Em web, colocar bonecos automaticamente em posições aleatórias dentro da área
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (!code || !game || !currentUserId) return;
+    if (!game.area || game.area.length < 3) return;
+    if (autoPlacedRef.current) return;
+    if (myDolls.length >= game.dollsPerPlayer) return;
+
+    autoPlacedRef.current = true;
+
+    (async () => {
+      const remaining = game.dollsPerPlayer - myDolls.length;
+      for (let i = 0; i < remaining; i++) {
+        const point = randomPointInPolygon(game.area!);
+        if (!point) continue;
+        try {
+          await placeDoll(code, point);
+          await new Promise((r) => setTimeout(r, 200));
+        } catch (e) {
+          console.error('Erro a colocar boneco automaticamente:', e);
+        }
+      }
+    })();
+  }, [code, game, currentUserId, myDolls.length]);
+
   const showFeedback = (message: string) => {
     setFeedback(message);
     if (Platform.OS === 'android') {
@@ -139,7 +173,6 @@ export default function PlaceDollsScreen() {
     const { latitude, longitude } = event.nativeEvent.coordinate;
     const point = { latitude, longitude };
 
-    // Validar se está dentro da área
     if (!game.area || !isPointInPolygon(point, game.area)) {
       showFeedback('Fora da área de jogo');
       if (Platform.OS !== 'web') {
@@ -190,7 +223,21 @@ export default function PlaceDollsScreen() {
     );
   };
 
-  // Estados de loading/erro (iguais ao outro ecrã)
+  const isAdmin = () => game?.adminId === currentUserId;
+  const allPlayersReady =
+    players.length >= 2 &&
+    players.every((p) => (p.dollsPlaced ?? 0) >= (game?.dollsPerPlayer ?? 2));
+
+  const handleStartGame = async () => {
+    if (!code) return;
+    try {
+      await updateGameStatus(code, 'playing');
+    } catch (e: any) {
+      Alert.alert('Erro', e.message ?? 'Não foi possível começar.');
+    }
+  };
+
+  // Estados de loading/erro
   if (!code || !game) {
     return (
       <View style={styles.loadingContainer}>
@@ -214,8 +261,11 @@ export default function PlaceDollsScreen() {
   if (Platform.OS === 'web') {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={styles.errorTitle}>Mapa não disponível em web</Text>
-        <Text style={styles.errorMessage}>Abre a app num telemóvel para continuar.</Text>
+        <Text style={styles.errorTitle}>Modo Demo (Web)</Text>
+        <Text style={styles.errorMessage}>
+          Os teus bonecos foram colocados automaticamente em posições aleatórias dentro da área.
+          {myDolls.length > 0 && `\n\nColocados: ${myDolls.length}/${game.dollsPerPlayer}`}
+        </Text>
         <Pressable style={styles.errorButton} onPress={confirmLeave}>
           <Text style={styles.errorButtonText}>SAIR DO JOGO</Text>
         </Pressable>
@@ -268,7 +318,6 @@ export default function PlaceDollsScreen() {
         customMapStyle={darkMapStyle}
         onPress={handleMapPress}
       >
-        {/* Polígono da área */}
         {game.area && game.area.length >= 3 && (
           <Polygon
             coordinates={game.area}
@@ -278,7 +327,6 @@ export default function PlaceDollsScreen() {
           />
         )}
 
-        {/* Bonecos do próprio jogador */}
         {myDolls.map((doll) => (
           <Marker
             key={doll.id}
@@ -288,7 +336,6 @@ export default function PlaceDollsScreen() {
           />
         ))}
 
-        {/* Pins dos outros jogadores */}
         {players
           .filter((p) => p.location && p.id !== currentUserId)
           .map((p) => (
@@ -301,14 +348,12 @@ export default function PlaceDollsScreen() {
           ))}
       </MapView>
 
-      {/* Feedback overlay */}
       {feedback && Platform.OS !== 'android' && (
         <View style={styles.feedbackOverlay}>
           <Text style={styles.feedbackText}>{feedback}</Text>
         </View>
       )}
 
-      {/* Lista de progresso dos outros jogadores */}
       <View style={styles.progressSection}>
         {players.map((p) => (
           <View key={p.id} style={styles.progressRow}>
@@ -343,6 +388,15 @@ export default function PlaceDollsScreen() {
         >
           <Text style={styles.smallButtonText}>← DESFAZER</Text>
         </Pressable>
+
+        {isAdmin() && allPlayersReady && (
+          <Pressable
+            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            onPress={handleStartGame}
+          >
+            <Text style={styles.primaryButtonText}>COMEÇAR →</Text>
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -470,6 +524,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   smallButtonText: { ...Typography.label, color: Colors.text, letterSpacing: 1 },
+  primaryButton: {
+    flex: 2,
+    backgroundColor: Colors.primary,
+    paddingVertical: Spacing.md,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: { ...Typography.label, color: Colors.background, letterSpacing: 1 },
   secondaryButton: {
     flex: 1,
     backgroundColor: Colors.surface,

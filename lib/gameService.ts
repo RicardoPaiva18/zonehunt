@@ -420,3 +420,35 @@ export function getRouteForGameStatus(game: Game): string {
 export async function confirmGameArea(code: string): Promise<void> {
   await updateDoc(doc(db, "games", code), { areaConfirmed: true });
 }
+
+/**
+ * Gera um ponto aleatório dentro de um polígono.
+ * Usa rejection sampling — aceitável para polígonos não muito alongados.
+ */
+export function randomPointInPolygon(
+  polygon: { latitude: number; longitude: number }[]
+): { latitude: number; longitude: number } | null {
+  if (polygon.length < 3) return null;
+
+  // Bounding box
+  let minLat = Infinity, maxLat = -Infinity;
+  let minLng = Infinity, maxLng = -Infinity;
+  for (const p of polygon) {
+    if (p.latitude < minLat) minLat = p.latitude;
+    if (p.latitude > maxLat) maxLat = p.latitude;
+    if (p.longitude < minLng) minLng = p.longitude;
+    if (p.longitude > maxLng) maxLng = p.longitude;
+  }
+
+  // Tentar até 100 vezes
+  for (let i = 0; i < 100; i++) {
+    const candidate = {
+      latitude: minLat + Math.random() * (maxLat - minLat),
+      longitude: minLng + Math.random() * (maxLng - minLng),
+    };
+    if (isPointInPolygon(candidate, polygon)) {
+      return candidate;
+    }
+  }
+  return null;
+}

@@ -59,7 +59,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "O ZoneHunt precisa da tua localização para te mostrar no mapa e detetar bonecos próximos."
         }
-      ]
+      ],
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,
