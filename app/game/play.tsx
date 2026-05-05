@@ -203,10 +203,8 @@ export default function PlayScreen() {
       return;
     }
 
-    Alert.alert(
-      "Capturar boneco",
-      "Ecrã da câmara vem na próxima iteração. Por agora, boneco virtualmente capturado.",
-    );
+    // Abrir ecrã da câmara
+    router.push(`/game/camera?code=${code}&dollId=${doll.id}`);
   };
 
   // Loading states

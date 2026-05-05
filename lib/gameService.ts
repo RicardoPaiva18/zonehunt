@@ -532,3 +532,37 @@ export function computeDetectionRadius(
   const radius = Math.sqrt(detectionArea / Math.PI);
   return Math.max(8, Math.min(50, radius));
 }
+
+/**
+ * Calcula o bearing (rumo) de um ponto A para um ponto B em graus (0-360).
+ * 0° = Norte, 90° = Este, 180° = Sul, 270° = Oeste.
+ */
+export function bearingTo(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number }
+): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const toDeg = (rad: number) => (rad * 180) / Math.PI;
+
+  const lat1 = toRad(from.latitude);
+  const lat2 = toRad(to.latitude);
+  const dLon = toRad(to.longitude - from.longitude);
+
+  const y = Math.sin(dLon) * Math.cos(lat2);
+  const x =
+    Math.cos(lat1) * Math.sin(lat2) -
+    Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+  const bearing = (toDeg(Math.atan2(y, x)) + 360) % 360;
+  return bearing;
+}
+
+/**
+ * Diferença angular mais curta entre dois ângulos (em graus, 0-360).
+ * Resultado entre -180 e 180.
+ * Positivo = b está à direita de a; negativo = à esquerda.
+ */
+export function angleDifference(a: number, b: number): number {
+  let diff = ((b - a + 540) % 360) - 180;
+  return diff;
+}
