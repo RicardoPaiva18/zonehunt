@@ -1,7 +1,7 @@
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
-import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { router, useLocalSearchParams, useFocusEffect } from "expo-router";
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -84,46 +84,49 @@ export default function PlayScreen() {
     }
   }, [game?.area]);
 
-  useEffect(() => {
-    if (Platform.OS === "web") return;
-    let watcher: Location.LocationSubscription | null = null;
+  // GPS — usa useFocusEffect para parar quando navegamos para a câmara
+  useFocusEffect(
+    useCallback(() => {
+      if (Platform.OS === 'web') return;
+      let watcher: Location.LocationSubscription | null = null;
 
-    (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") {
-        setPermissionDenied(true);
-        return;
-      }
+      (async () => {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setPermissionDenied(true);
+          return;
+        }
 
-      const initial = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      setMyLocation({
-        latitude: initial.coords.latitude,
-        longitude: initial.coords.longitude,
-      });
+        const initial = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        setMyLocation({
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+        });
 
-      watcher = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.BestForNavigation,
-          distanceInterval: 1,
-          timeInterval: 2000,
-        },
-        (pos) => {
-          const newCoords = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          };
-          setMyLocation(newCoords);
-          if (code) updatePlayerLocation(code, newCoords).catch(console.error);
-        },
-      );
-    })();
+        watcher = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.BestForNavigation,
+            distanceInterval: 1,
+            timeInterval: 2000,
+          },
+          (pos) => {
+            const newCoords = {
+              latitude: pos.coords.latitude,
+              longitude: pos.coords.longitude,
+            };
+            setMyLocation(newCoords);
+            if (code) updatePlayerLocation(code, newCoords).catch(console.error);
+          },
+        );
+      })();
 
-    return () => {
-      watcher?.remove();
-    };
-  }, [code]);
+      return () => {
+        watcher?.remove();
+      };
+    }, [code])
+  );
 
   // Bonecos adversários visíveis = dentro do raio de deteção
   const opponentsInRange = allDolls.filter((d) => {
@@ -135,7 +138,7 @@ export default function PlayScreen() {
 
   const hasOpponentsInRange = opponentsInRange.length > 0;
 
-  // Calcular boneco mais próximo (dos visíveis) e haptics
+  // Calcular boneco mais próximo e haptics
   useEffect(() => {
     if (!myLocation || !currentUserId || opponentsInRange.length === 0) {
       setNearestDoll(null);
@@ -203,7 +206,6 @@ export default function PlayScreen() {
       return;
     }
 
-    // Abrir ecrã da câmara
     router.push(`/game/camera?code=${code}&dollId=${doll.id}`);
   };
 

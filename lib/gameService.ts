@@ -262,10 +262,11 @@ export async function findActiveGameForUser(): Promise<Game | null> {
  */
 export async function updatePlayerLocation(
   code: string,
-  location: { latitude: number; longitude: number },
-): Promise<void> {
-  const userId = await getPlayerId();
-  await updateDoc(doc(db, "games", code, "players", userId), { location });
+  location: { latitude: number; longitude: number }
+) {
+  const playerId = await getPlayerId();
+  const ref = doc(db, 'games', code, 'players', playerId);
+  await setDoc(ref, { location }, { merge: true });
 }
 
 /**
