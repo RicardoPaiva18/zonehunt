@@ -567,3 +567,47 @@ export function angleDifference(a: number, b: number): number {
   let diff = ((b - a + 540) % 360) - 180;
   return diff;
 }
+
+export async function captureDoll(
+  code: string,
+  dollId: string,
+): Promise<{ won: boolean }> {
+  const playerId = await getPlayerId();
+
+  // Marcar boneco como capturado
+  const dollRef = doc(db, 'games', code, 'dolls', dollId);
+  await updateDoc(dollRef, {
+    capturedBy: playerId,
+    capturedAt: Date.now(),
+  });
+
+  // Buscar todos os bonecos do jogo para verificar vitória
+  const dollsSnap = await getDocs(collection(db, 'games', code, 'dolls'));
+  const allDolls = dollsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Doll);
+
+  // Buscar todos os jogadores
+  const playersSnap = await getDocs(collection(db, 'games', code, 'players'));
+  const allPlayers = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Player);
+
+  // Cores adversárias = cores de todos os jogadores exceto eu
+  const opponentColors = allPlayers
+    .filter((p) => p.id !== playerId)
+    .map((p) => p.color);
+
+  // Bonecos que eu capturei
+  const myCaptured = allDolls.filter((d) => d.capturedBy === playerId);
+  const capturedColors = [...new Set(myCaptured.map((d) => d.ownerColor))];
+
+  // Ganhei se capturei pelo menos um boneco de cada adversário
+  const won = opponentColors.every((color) => capturedColors.includes(color));
+
+  if (won) {
+    await updateDoc(doc(db, 'games', code), {
+      status: 'finished',
+      winnerId: playerId,
+      finishedAt: Date.now(),
+    });
+  }
+
+  return { won };
+}
