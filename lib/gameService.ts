@@ -223,11 +223,10 @@ export async function updateGameStatus(code: string, status: string) {
   }
 
   await updateDoc(ref, extra);
-} 
+}
 
 /**
  * Remove o jogador atual do jogo.
- * Se o admin sair, o jogo fica órfão (trataremos disto mais tarde).
  */
 export async function leaveGame(code: string): Promise<void> {
   const userId = await getPlayerId();
@@ -418,7 +417,7 @@ export function getRouteForGameStatus(game: Game): string {
       }
       return `/game/area?code=${game.code}`;
     case 'playing':
-      return `/game/place?code=${game.code}`; // temporário até ter /game/play
+      return `/game/play?code=${game.code}`;
     default:
       return '/';
   }
@@ -603,21 +602,6 @@ export async function captureDoll(
   const capturedColors = [...new Set(myCaptured.map((d) => d.ownerColor))];
 
   const won = opponentColors.every((color) => capturedColors.includes(color));
-
-  // ← LOGS TEMPORÁRIOS
-  console.log('=== captureDoll debug ===');
-  console.log('playerId:', playerId);
-  console.log('opponentColors:', opponentColors);
-  console.log('allDolls:', JSON.stringify(allDolls.map(d => ({
-    id: d.id,
-    ownerId: d.ownerId,
-    ownerColor: d.ownerColor,
-    capturedBy: d.capturedBy,
-  }))));
-  console.log('myCaptured count:', myCaptured.length);
-  console.log('capturedColors:', capturedColors);
-  console.log('won:', won);
-  console.log('========================');
 
   if (won) {
     await updateDoc(doc(db, 'games', code), {

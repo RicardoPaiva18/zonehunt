@@ -31,7 +31,7 @@ export default function CameraScreen() {
   const flashAnim = useRef(new Animated.Value(0)).current;
   const capturingRef = useRef(false);
 
-  // Cálculos AR — antes de qualquer useEffect que os usa e antes dos early returns
+  // Cálculos de AR: distância, rumo e visibilidade do alvo na câmara
   const distance = doll && myLocation ? distanceBetween(myLocation, doll.location) : null;
   const bearing = doll && myLocation ? bearingTo(myLocation, doll.location) : null;
   const angleDiff = bearing !== null ? angleDifference(heading, bearing) : null;
@@ -39,8 +39,6 @@ export default function CameraScreen() {
   const canCapture = isVisible && distance !== null && distance <= GameConfig.CAPTURE_RADIUS_METERS;
   const dollSize = distance !== null ? Math.max(40, Math.min(120, 120 - (distance - 8) * 1.5)) : 60;
   const horizontalOffset = angleDiff !== null ? (angleDiff / ANGLE_TOLERANCE) * 40 : 0;
-
-  // ─── TODOS OS HOOKS AQUI — antes de qualquer return condicional ───
 
   // Animação de pulsar
   useEffect(() => {
@@ -100,7 +98,7 @@ export default function CameraScreen() {
     };
   }, []);
 
-  // Fade in/out do boneco — usa isVisible calculado acima
+  // Fade do boneco conforme entra ou sai do campo de visão
   useEffect(() => {
     Animated.timing(fadeAnim, {
       toValue: isVisible ? 1 : 0,
@@ -111,8 +109,6 @@ export default function CameraScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     }
   }, [isVisible]);
-
-  // ─── FUNÇÕES ───
 
   const handleClose = () => router.back();
 
@@ -128,7 +124,7 @@ export default function CameraScreen() {
 
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      playCaptureSound().catch(() => {});  // ← novo
+      playCaptureSound().catch(() => {});
     }
 
     try {
@@ -143,13 +139,11 @@ export default function CameraScreen() {
         }
       }, 1500);
     } catch (e: any) {
-      console.error('Erro ao capturar:', e);
+      console.error('Erro a capturar:', e);
       capturingRef.current = false;
       setCapturing(false);
     }
   };
-
-  // ─── EARLY RETURNS — só depois de todos os hooks ───
 
   if (Platform.OS === 'web') {
     return (
@@ -181,8 +175,6 @@ export default function CameraScreen() {
       </View>
     );
   }
-
-  // ─── RENDER PRINCIPAL ───
 
   return (
     <View style={styles.fullscreen}>
@@ -258,20 +250,6 @@ export default function CameraScreen() {
                 ? 'PRONTO A CAPTURAR — TOCA NO BOTÃO'
                 : `APROXIMA-TE — ${distance !== null ? Math.round(distance) : '?'}m`
               : 'PROCURA O BONECO À TUA VOLTA'}
-          </Text>
-        </View>
-      )}
-
-      {/* Debug (remover antes dos testes) */}
-      {!captured && (
-        <View style={styles.debugPanel}>
-          <Text style={styles.debugText}>Heading: {heading.toFixed(0)}°</Text>
-          <Text style={styles.debugText}>
-            Bearing: {bearing !== null ? `${bearing.toFixed(0)}°` : '—'}
-          </Text>
-          <Text style={[styles.debugText, isVisible && styles.debugTextLocked]}>
-            Δ: {angleDiff !== null ? `${angleDiff.toFixed(0)}°` : '—'}
-            {isVisible ? '  🎯' : ''}
           </Text>
         </View>
       )}
@@ -370,12 +348,6 @@ const styles = StyleSheet.create({
   },
   infoLabel: { ...Typography.caption, color: Colors.primary, letterSpacing: 2, marginBottom: 4 },
   infoValue: { ...Typography.label, color: Colors.text, letterSpacing: 1, textAlign: 'center' },
-  debugPanel: {
-    position: 'absolute', top: 100, left: Spacing.lg,
-    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 8, padding: Spacing.sm, gap: 2,
-  },
-  debugText: { color: '#fff', fontSize: 12, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  debugTextLocked: { color: Colors.primary, fontWeight: 'bold' },
   captureButtonContainer: {
     position: 'absolute', bottom: Spacing.xl, left: 0, right: 0, alignItems: 'center',
   },
