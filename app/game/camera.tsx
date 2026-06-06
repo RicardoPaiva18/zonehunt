@@ -13,6 +13,7 @@ import { distanceBetween, bearingTo, angleDifference, captureDoll } from '../../
 import { Colors, Spacing, Typography, GameConfig } from '../../constants/theme';
 import type { Doll } from '../../types/game';
 import { playCaptureSound } from '../../lib/soundService';
+import { logEvent } from '../../lib/analyticsService';
 
 const ANGLE_TOLERANCE = 15;
 
@@ -132,6 +133,7 @@ export default function CameraScreen() {
 
     try {
       const { won } = await captureDoll(code, dollId);
+      logEvent(code, 'capture_success', { won }).catch(() => {});
       setCaptured(true);
       setTimeout(() => {
         if (won) {

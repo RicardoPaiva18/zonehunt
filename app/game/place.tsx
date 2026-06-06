@@ -21,6 +21,7 @@ import { getPlayerId } from '../../lib/playerIdentity';
 import { Spacing, Typography } from '../../constants/theme';
 import type { Game, Player, Doll } from '../../types/game';
 import { useTheme } from '../../context/ThemeContext';
+import { logEvent } from '../../lib/analyticsService';
 
 type LocationCoords = {
   latitude: number;
@@ -146,6 +147,7 @@ export default function PlaceDollsScreen() {
     }
     try {
       await placeDoll(code, point);
+      logEvent(code, 'doll_placed').catch(() => {});
       if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Não foi possível colocar o boneco.');

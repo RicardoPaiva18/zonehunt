@@ -21,6 +21,8 @@ import type { Game, Player } from "../../types/game";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { playGameStartSound } from '../../lib/soundService';
 import { useTheme } from '../../context/ThemeContext';
+import { logEvent } from '../../lib/analyticsService';
+
 
 export default function LobbyScreen() {
   const { colors } = useTheme();
@@ -43,6 +45,7 @@ export default function LobbyScreen() {
         router.replace(`/game/area?code=${code}`);
       }
       if (g?.status === 'playing') {
+        logEvent(code, 'game_started').catch(() => {});
         playGameStartSound().catch(() => {});
         router.replace(`/game/play?code=${code}`);
       }

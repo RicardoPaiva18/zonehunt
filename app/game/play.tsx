@@ -34,6 +34,7 @@ import {
 import { getPlayerId } from "../../lib/playerIdentity";
 import type { Doll, Game, Player } from "../../types/game";
 import { useTheme } from "../../context/ThemeContext";
+import { logEvent } from '../../lib/analyticsService';
 
 type LocationCoords = {
   latitude: number;
@@ -141,6 +142,7 @@ export default function PlayScreen() {
       if (now - lastHapticRef.current > cooldown) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
         playDetectionSound().catch(() => {});
+        logEvent(code!, 'doll_detected', { distance: Math.round(nearest.distance) }).catch(() => {});
         lastHapticRef.current = now;
       }
     } else if (nearest.distance <= GameConfig.PROXIMITY_ALERT_METERS) {
@@ -171,6 +173,7 @@ export default function PlayScreen() {
     if (!myLocation) return;
     const distance = distanceBetween(myLocation, doll.location);
     if (distance > GameConfig.CAPTURE_RADIUS_METERS) {
+      logEvent(code!, 'capture_too_far', { distance: Math.round(distance) }).catch(() => {});
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
       }
@@ -180,6 +183,7 @@ export default function PlayScreen() {
       );
       return;
     }
+    logEvent(code!, 'capture_attempted', { distance: Math.round(distance) }).catch(() => {});
     router.push(`/game/camera?code=${code}&dollId=${doll.id}`);
   };
 
