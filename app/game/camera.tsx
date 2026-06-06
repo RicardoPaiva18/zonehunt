@@ -12,6 +12,7 @@ import { db } from '../../lib/firebase';
 import { distanceBetween, bearingTo, angleDifference, captureDoll } from '../../lib/gameService';
 import { Colors, Spacing, Typography, GameConfig } from '../../constants/theme';
 import type { Doll } from '../../types/game';
+import { playCaptureSound } from '../../lib/soundService';
 
 const ANGLE_TOLERANCE = 15;
 
@@ -126,6 +127,7 @@ export default function CameraScreen() {
 
     if (Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      playCaptureSound().catch(() => {});  // ← novo
     }
 
     try {

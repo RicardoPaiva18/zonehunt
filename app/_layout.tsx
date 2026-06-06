@@ -1,15 +1,16 @@
 import { Stack } from 'expo-router';
-import { Colors } from '../constants/theme';
+import { ThemeProvider, useTheme } from '../context/ThemeContext';
 
+function AppStack() {
+  const { colors } = useTheme();
 
-export default function RootLayout() {
   return (
     <Stack
       screenOptions={{
-        headerStyle: { backgroundColor: Colors.background },
-        headerTintColor: Colors.text,
-        headerTitleStyle: { color: Colors.text },
-        contentStyle: { backgroundColor: Colors.background },
+        headerStyle: { backgroundColor: colors.background },
+        headerTintColor: colors.text,
+        headerTitleStyle: { color: colors.text },
+        contentStyle: { backgroundColor: colors.background },
       }}
     >
       <Stack.Screen name="index" options={{ headerShown: false }} />
@@ -20,6 +21,15 @@ export default function RootLayout() {
       <Stack.Screen name="game/place" options={{ headerShown: false }} />
       <Stack.Screen name="game/play" options={{ headerShown: false }} />
       <Stack.Screen name="game/camera" options={{ headerShown: false }} />
+      <Stack.Screen name="game/finish" options={{ headerShown: false }} />
     </Stack>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <AppStack />
+    </ThemeProvider>
   );
 }

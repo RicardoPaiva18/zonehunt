@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator, Platform, ToastAndroid } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MapView, Marker, PROVIDER_GOOGLE, Polygon } from '../../components/PlatformMap';
 import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
@@ -17,8 +18,9 @@ import {
   randomPointInPolygon,
 } from '../../lib/gameService';
 import { getPlayerId } from '../../lib/playerIdentity';
-import { Colors, Spacing, Typography } from '../../constants/theme';
+import { Spacing, Typography } from '../../constants/theme';
 import type { Game, Player, Doll } from '../../types/game';
+import { useTheme } from '../../context/ThemeContext';
 
 type LocationCoords = {
   latitude: number;
@@ -26,6 +28,7 @@ type LocationCoords = {
 };
 
 export default function PlaceDollsScreen() {
+  const { colors, mapStyle } = useTheme();
   const { code } = useLocalSearchParams<{ code: string }>();
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -37,17 +40,14 @@ export default function PlaceDollsScreen() {
   const mapRef = useRef<any>(null);
   const autoPlacedRef = useRef(false);
 
-  // ID do jogador
   useEffect(() => {
     getPlayerId().then(setCurrentUserId);
   }, []);
 
-  // Subscrever ao jogo, jogadores e bonecos próprios
   useEffect(() => {
     if (!code) return;
     const unsubGame = subscribeToGame(code, (g) => {
       setGame(g);
-      // Quando o jogo passar a 'playing', todos navegam para /game/play
       if (g?.status === 'playing' && code) {
         router.replace(`/game/play?code=${code}`);
       }
@@ -55,9 +55,7 @@ export default function PlaceDollsScreen() {
     const unsubPlayers = subscribeToPlayers(code, setPlayers);
 
     let unsubDolls: (() => void) | null = null;
-    subscribeToMyDolls(code, setMyDolls).then((fn) => {
-      unsubDolls = fn;
-    });
+    subscribeToMyDolls(code, setMyDolls).then((fn) => { unsubDolls = fn; });
 
     return () => {
       unsubGame();
@@ -66,10 +64,8 @@ export default function PlaceDollsScreen() {
     };
   }, [code]);
 
-  // GPS (só em mobile)
   useEffect(() => {
     if (Platform.OS === 'web') return;
-
     let watcher: Location.LocationSubscription | null = null;
 
     (async () => {
@@ -79,57 +75,31 @@ export default function PlaceDollsScreen() {
         return;
       }
 
-      const initial = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-      const coords = {
-        latitude: initial.coords.latitude,
-        longitude: initial.coords.longitude,
-      };
+      const initial = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      const coords = { latitude: initial.coords.latitude, longitude: initial.coords.longitude };
       setMyLocation(coords);
 
-      // Centrar no centro da área (se já houver), senão na localização
       if (game?.area && game.area.length > 0) {
         const center = centerOfPolygon(game.area);
-        mapRef.current?.animateToRegion({
-          ...center,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        }, 1000);
+        mapRef.current?.animateToRegion({ ...center, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 1000);
       } else {
-        mapRef.current?.animateToRegion({
-          ...coords,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        }, 1000);
+        mapRef.current?.animateToRegion({ ...coords, latitudeDelta: 0.005, longitudeDelta: 0.005 }, 1000);
       }
 
       watcher = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 2,
-          timeInterval: 3000,
-        },
+        { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 3000 },
         (pos) => {
-          const newCoords = {
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-          };
+          const newCoords = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
           setMyLocation(newCoords);
-          if (code) {
-            updatePlayerLocation(code, newCoords).catch(console.error);
-          }
+          if (code) updatePlayerLocation(code, newCoords).catch(console.error);
         }
       );
     })();
 
-    return () => {
-      watcher?.remove();
-    };
+    return () => { watcher?.remove(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [code]);
 
-  // Em web, colocar bonecos automaticamente em posições aleatórias dentro da área
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (!code || !game || !currentUserId) return;
@@ -156,9 +126,7 @@ export default function PlaceDollsScreen() {
 
   const showFeedback = (message: string) => {
     setFeedback(message);
-    if (Platform.OS === 'android') {
-      ToastAndroid.show(message, ToastAndroid.SHORT);
-    }
+    if (Platform.OS === 'android') ToastAndroid.show(message, ToastAndroid.SHORT);
     setTimeout(() => setFeedback(null), 2000);
   };
 
@@ -169,23 +137,16 @@ export default function PlaceDollsScreen() {
       showFeedback('Já colocaste todos os bonecos');
       return;
     }
-
     const { latitude, longitude } = event.nativeEvent.coordinate;
     const point = { latitude, longitude };
-
     if (!game.area || !isPointInPolygon(point, game.area)) {
       showFeedback('Fora da área de jogo');
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
-      }
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
       return;
     }
-
     try {
       await placeDoll(code, point);
-      if (Platform.OS !== 'web') {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      }
+      if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Não foi possível colocar o boneco.');
     }
@@ -205,22 +166,14 @@ export default function PlaceDollsScreen() {
       if (code) await leaveGame(code);
       router.replace('/');
     };
-
     if (Platform.OS === 'web') {
-      if (window.confirm('Tens a certeza que queres sair do jogo?')) {
-        performLeave();
-      }
+      if (window.confirm('Tens a certeza que queres sair do jogo?')) performLeave();
       return;
     }
-
-    Alert.alert(
-      'Sair do jogo',
-      'Tens a certeza que queres sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sair', style: 'destructive', onPress: performLeave },
-      ],
-    );
+    Alert.alert('Sair do jogo', 'Tens a certeza que queres sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Sair', style: 'destructive', onPress: performLeave },
+    ]);
   };
 
   const isAdmin = () => game?.adminId === currentUserId;
@@ -237,22 +190,21 @@ export default function PlaceDollsScreen() {
     }
   };
 
-  // Estados de loading/erro
   if (!code || !game) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>A carregar jogo...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>A carregar jogo...</Text>
       </View>
     );
   }
 
   if (permissionDenied) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorTitle}>Sem permissão de localização</Text>
-        <Pressable style={styles.errorButton} onPress={confirmLeave}>
-          <Text style={styles.errorButtonText}>SAIR DO JOGO</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorTitle, { color: colors.error }]}>Sem permissão de localização</Text>
+        <Pressable style={[styles.errorButton, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={confirmLeave}>
+          <Text style={[styles.errorButtonText, { color: colors.text }]}>SAIR DO JOGO</Text>
         </Pressable>
       </View>
     );
@@ -260,14 +212,14 @@ export default function PlaceDollsScreen() {
 
   if (Platform.OS === 'web') {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorTitle}>Modo Demo (Web)</Text>
-        <Text style={styles.errorMessage}>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorTitle, { color: colors.error }]}>Modo Demo (Web)</Text>
+        <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
           Os teus bonecos foram colocados automaticamente em posições aleatórias dentro da área.
           {myDolls.length > 0 && `\n\nColocados: ${myDolls.length}/${game.dollsPerPlayer}`}
         </Text>
-        <Pressable style={styles.errorButton} onPress={confirmLeave}>
-          <Text style={styles.errorButtonText}>SAIR DO JOGO</Text>
+        <Pressable style={[styles.errorButton, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={confirmLeave}>
+          <Text style={[styles.errorButtonText, { color: colors.text }]}>SAIR DO JOGO</Text>
         </Pressable>
       </View>
     );
@@ -275,28 +227,28 @@ export default function PlaceDollsScreen() {
 
   if (!myLocation) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>A obter localização...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>A obter localização...</Text>
       </View>
     );
   }
 
   const totalDolls = game.dollsPerPlayer;
   const me = players.find((p) => p.id === currentUserId);
-  const myColor = me ? getPlayerColorHex(me.color) : Colors.primary;
+  const myColor = me ? getPlayerColorHex(me.color) : colors.primary;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Colocar Bonecos</Text>
-        <Text style={styles.counter}>
+        <Text style={[styles.title, { color: colors.text }]}>Colocar Bonecos</Text>
+        <Text style={[styles.counter, { color: colors.primary }]}>
           {myDolls.length}/{totalDolls}
         </Text>
       </View>
 
       <View style={styles.instructionBar}>
-        <Text style={styles.instructionText}>
+        <Text style={[styles.instructionText, { color: colors.primary }]}>
           {myDolls.length < totalDolls
             ? 'TOCA DENTRO DA ÁREA PARA COLOCAR UM BONECO'
             : 'JÁ COLOCASTE TODOS OS BONECOS — AGUARDAR OUTROS'}
@@ -315,42 +267,32 @@ export default function PlaceDollsScreen() {
         }}
         showsUserLocation
         showsMyLocationButton={false}
-        customMapStyle={darkMapStyle}
+        customMapStyle={mapStyle}
         onPress={handleMapPress}
       >
         {game.area && game.area.length >= 3 && (
           <Polygon
             coordinates={game.area}
-            strokeColor={Colors.primary}
+            strokeColor={colors.primary}
             strokeWidth={2}
             fillColor="rgba(74, 222, 128, 0.1)"
           />
         )}
 
         {myDolls.map((doll) => (
-          <Marker
-            key={doll.id}
-            coordinate={doll.location}
-            pinColor={myColor}
-            title="Teu boneco"
-          />
+          <Marker key={doll.id} coordinate={doll.location} pinColor={myColor} title="Teu boneco" />
         ))}
 
         {players
           .filter((p) => p.location && p.id !== currentUserId)
           .map((p) => (
-            <Marker
-              key={p.id}
-              coordinate={p.location!}
-              title={p.name}
-              pinColor={getPlayerColorHex(p.color)}
-            />
+            <Marker key={p.id} coordinate={p.location!} title={p.name} pinColor={getPlayerColorHex(p.color)} />
           ))}
       </MapView>
 
       {feedback && Platform.OS !== 'android' && (
         <View style={styles.feedbackOverlay}>
-          <Text style={styles.feedbackText}>{feedback}</Text>
+          <Text style={[styles.feedbackText, { color: colors.text }]}>{feedback}</Text>
         </View>
       )}
 
@@ -358,10 +300,10 @@ export default function PlaceDollsScreen() {
         {players.map((p) => (
           <View key={p.id} style={styles.progressRow}>
             <View style={[styles.colorDot, { backgroundColor: getPlayerColorHex(p.color) }]} />
-            <Text style={styles.progressName}>
+            <Text style={[styles.progressName, { color: colors.textSecondary }]}>
               {p.id === currentUserId ? 'Tu' : p.name}
             </Text>
-            <Text style={styles.progressCount}>
+            <Text style={[styles.progressCount, { color: colors.text }]}>
               {p.dollsPlaced ?? 0}/{totalDolls}
               {(p.dollsPlaced ?? 0) >= totalDolls && '  ✓'}
             </Text>
@@ -371,34 +313,43 @@ export default function PlaceDollsScreen() {
 
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}
           onPress={confirmLeave}
         >
-          <Text style={styles.secondaryButtonText}>SAIR</Text>
+          <Text style={[styles.secondaryButtonText, { color: colors.text }]}>SAIR</Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [
             styles.smallButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
             pressed && styles.pressed,
             myDolls.length === 0 && styles.disabled,
           ]}
           onPress={handleUndo}
           disabled={myDolls.length === 0}
         >
-          <Text style={styles.smallButtonText}>← DESFAZER</Text>
+          <Text style={[styles.smallButtonText, { color: colors.text }]}>← DESFAZER</Text>
         </Pressable>
 
         {isAdmin() && allPlayersReady && (
           <Pressable
-            style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.primaryButton,
+              { backgroundColor: colors.primary },
+              pressed && styles.pressed,
+            ]}
             onPress={handleStartGame}
           >
-            <Text style={styles.primaryButtonText}>COMEÇAR →</Text>
+            <Text style={[styles.primaryButtonText, { color: colors.background }]}>COMEÇAR →</Text>
           </Pressable>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -407,142 +358,67 @@ function centerOfPolygon(polygon: LocationCoords[]): LocationCoords {
     (acc, p) => ({ latitude: acc.latitude + p.latitude, longitude: acc.longitude + p.longitude }),
     { latitude: 0, longitude: 0 }
   );
-  return {
-    latitude: sum.latitude / polygon.length,
-    longitude: sum.longitude / polygon.length,
-  };
+  return { latitude: sum.latitude / polygon.length, longitude: sum.longitude / polygon.length };
 }
 
 function getPlayerColorHex(color: string): string {
-  const colors: Record<string, string> = {
-    green: '#4ade80',
-    orange: '#fb923c',
-    blue: '#60a5fa',
-    purple: '#c084fc',
-    red: '#f87171',
-    yellow: '#fbbf24',
-    pink: '#f472b6',
-    cyan: '#22d3ee',
+  const map: Record<string, string> = {
+    green: '#4ade80', orange: '#fb923c', blue: '#60a5fa', purple: '#c084fc',
+    red: '#f87171', yellow: '#fbbf24', pink: '#f472b6', cyan: '#22d3ee',
   };
-  return colors[color] ?? '#71717a';
+  return map[color] ?? '#71717a';
 }
 
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#0a0a0a' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0a0a0a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#27272a' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1a1a1a' }] },
-];
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   loadingContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    gap: Spacing.md,
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    padding: Spacing.lg, gap: Spacing.md,
   },
-  loadingText: { ...Typography.body, color: Colors.textSecondary, marginTop: Spacing.md },
-  errorTitle: { ...Typography.heading, color: Colors.error, textAlign: 'center' },
-  errorMessage: { ...Typography.body, color: Colors.textSecondary, textAlign: 'center' },
+  loadingText: { ...Typography.body, marginTop: Spacing.md },
+  errorTitle: { ...Typography.heading, textAlign: 'center' },
+  errorMessage: { ...Typography.body, textAlign: 'center' },
   errorButton: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    marginTop: Spacing.lg,
+    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md,
+    borderRadius: 8, borderWidth: 1, marginTop: Spacing.lg,
   },
-  errorButtonText: { ...Typography.label, color: Colors.text, letterSpacing: 1 },
+  errorButtonText: { ...Typography.label, letterSpacing: 1 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: Spacing.lg,
-    paddingBottom: 0,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', padding: Spacing.lg, paddingBottom: 0,
   },
-  title: { ...Typography.heading, color: Colors.text },
-  counter: {
-    ...Typography.heading,
-    color: Colors.primary,
-    fontSize: 18,
-  },
+  title: { ...Typography.heading },
+  counter: { ...Typography.heading, fontSize: 18 },
   instructionBar: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
-  instructionText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
+  instructionText: { ...Typography.caption, letterSpacing: 1, textAlign: 'center' },
   map: { flex: 1 },
   feedbackOverlay: {
-    position: 'absolute',
-    top: '50%',
-    left: 20,
-    right: 20,
+    position: 'absolute', top: '50%', left: 20, right: 20,
     backgroundColor: 'rgba(239, 68, 68, 0.9)',
-    padding: Spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
+    padding: Spacing.md, borderRadius: 8, alignItems: 'center',
   },
-  feedbackText: {
-    color: Colors.text,
-    ...Typography.label,
-    letterSpacing: 1,
-  },
-  progressSection: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-    gap: 4,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
+  feedbackText: { ...Typography.label, letterSpacing: 1 },
+  progressSection: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, gap: 4 },
+  progressRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   colorDot: { width: 10, height: 10, borderRadius: 5 },
-  progressName: { ...Typography.caption, color: Colors.textSecondary, flex: 1 },
-  progressCount: { ...Typography.caption, color: Colors.text, fontWeight: 'bold' },
-  footer: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    padding: Spacing.lg,
-  },
+  progressName: { ...Typography.caption, flex: 1 },
+  progressCount: { ...Typography.caption, fontWeight: 'bold' },
+  footer: { flexDirection: 'row', gap: Spacing.sm, padding: Spacing.lg },
   smallButton: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flex: 1, paddingVertical: Spacing.md, borderRadius: 8,
+    alignItems: 'center', borderWidth: 1,
   },
-  smallButtonText: { ...Typography.label, color: Colors.text, letterSpacing: 1 },
+  smallButtonText: { ...Typography.label, letterSpacing: 1 },
   primaryButton: {
-    flex: 2,
-    backgroundColor: Colors.primary,
-    paddingVertical: Spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 2, paddingVertical: Spacing.md, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center',
   },
-  primaryButtonText: { ...Typography.label, color: Colors.background, letterSpacing: 1 },
+  primaryButtonText: { ...Typography.label, letterSpacing: 1 },
   secondaryButton: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    paddingVertical: Spacing.md,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    flex: 1, paddingVertical: Spacing.md, borderRadius: 8,
+    alignItems: 'center', borderWidth: 1,
   },
-  secondaryButtonText: { ...Typography.label, color: Colors.text, letterSpacing: 1 },
+  secondaryButtonText: { ...Typography.label, letterSpacing: 1 },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
 });

@@ -75,7 +75,7 @@ export async function createGame(
     status: "waiting" as GameStatus,
     adminId: userId,
     maxPlayers,
-    dollsPerPlayer: 2,
+    dollsPerPlayer: 1,
     area: null,
     areaConfirmed: false,
     createdAt: Date.now(),
@@ -209,12 +209,21 @@ export async function joinGame(
  * Muda o estado do jogo (ex: waiting -> placing).
  * Só deve ser chamado pelo admin.
  */
-export async function updateGameStatus(
-  code: string,
-  status: GameStatus,
-): Promise<void> {
-  await updateDoc(doc(db, "games", code), { status });
-}
+export async function updateGameStatus(code: string, status: string) {
+  const ref = doc(db, 'games', code);
+  const extra: Record<string, any> = { status };
+
+  if (status === 'playing') {
+    extra.startedAt = Date.now();
+
+    // Calcular dollsPerPlayer = nº jogadores - 1
+    const playersSnap = await getDocs(collection(db, 'games', code, 'players'));
+    const numPlayers = playersSnap.size;
+    extra.dollsPerPlayer = Math.max(1, numPlayers - 1);
+  }
+
+  await updateDoc(ref, extra);
+} 
 
 /**
  * Remove o jogador atual do jogo.
@@ -574,32 +583,41 @@ export async function captureDoll(
 ): Promise<{ won: boolean }> {
   const playerId = await getPlayerId();
 
-  // Marcar boneco como capturado
   const dollRef = doc(db, 'games', code, 'dolls', dollId);
   await updateDoc(dollRef, {
     capturedBy: playerId,
     capturedAt: Date.now(),
   });
 
-  // Buscar todos os bonecos do jogo para verificar vitória
   const dollsSnap = await getDocs(collection(db, 'games', code, 'dolls'));
   const allDolls = dollsSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Doll);
 
-  // Buscar todos os jogadores
   const playersSnap = await getDocs(collection(db, 'games', code, 'players'));
   const allPlayers = playersSnap.docs.map((d) => ({ id: d.id, ...d.data() }) as Player);
 
-  // Cores adversárias = cores de todos os jogadores exceto eu
   const opponentColors = allPlayers
     .filter((p) => p.id !== playerId)
     .map((p) => p.color);
 
-  // Bonecos que eu capturei
   const myCaptured = allDolls.filter((d) => d.capturedBy === playerId);
   const capturedColors = [...new Set(myCaptured.map((d) => d.ownerColor))];
 
-  // Ganhei se capturei pelo menos um boneco de cada adversário
   const won = opponentColors.every((color) => capturedColors.includes(color));
+
+  // ← LOGS TEMPORÁRIOS
+  console.log('=== captureDoll debug ===');
+  console.log('playerId:', playerId);
+  console.log('opponentColors:', opponentColors);
+  console.log('allDolls:', JSON.stringify(allDolls.map(d => ({
+    id: d.id,
+    ownerId: d.ownerId,
+    ownerColor: d.ownerColor,
+    capturedBy: d.capturedBy,
+  }))));
+  console.log('myCaptured count:', myCaptured.length);
+  console.log('capturedColors:', capturedColors);
+  console.log('won:', won);
+  console.log('========================');
 
   if (won) {
     await updateDoc(doc(db, 'games', code), {

@@ -11,10 +11,13 @@ import {
   findActiveGameForUser,
   getRouteForGameStatus,
 } from '../lib/gameService';
-import { Colors, Spacing, Typography } from '../constants/theme';
+import { Spacing, Typography } from '../constants/theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 
 export default function HomeScreen() {
   const [checking, setChecking] = useState(true);
+  const { isDark, toggleTheme, colors } = useTheme();
 
   useEffect(() => {
     (async () => {
@@ -33,53 +36,90 @@ export default function HomeScreen() {
 
   if (checking) {
     return (
-      <View style={styles.container}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.checkingLabel}>A verificar...</Text>
-      </View>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+        <Text style={[styles.checkingLabel, { color: colors.textMuted }]}>
+          A verificar...
+        </Text>
+      </SafeAreaView>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* Toggle de tema — canto superior direito */}
+      <Pressable
+        style={[styles.themeToggle, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={toggleTheme}
+      >
+        <Text style={styles.themeToggleIcon}>{isDark ? '☀️' : '🌙'}</Text>
+      </Pressable>
+
       <View style={styles.header}>
-        <View style={styles.logo}>
-          <Text style={styles.logoText}>◎</Text>
+        <View style={[styles.logo, { backgroundColor: colors.primary }]}>
+          <Text style={[styles.logoText, { color: colors.background }]}>◎</Text>
         </View>
-        <Text style={styles.title}>ZONEHUNT</Text>
-        <Text style={styles.tagline}>MULTIPLAYER · LOCATION · AR</Text>
+        <Text style={[styles.title, { color: colors.text }]}>ZONEHUNT</Text>
+        <Text style={[styles.tagline, { color: colors.textMuted }]}>
+          MULTIPLAYER · LOCATION · AR
+        </Text>
       </View>
 
       <View style={styles.buttons}>
         <Pressable
-          style={({ pressed }) => [styles.primaryButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.primaryButton,
+            { backgroundColor: colors.primary },
+            pressed && styles.pressed,
+          ]}
           onPress={() => router.push('/create')}
         >
-          <Text style={styles.primaryButtonText}>⊕ CRIAR JOGO</Text>
+          <Text style={[styles.primaryButtonText, { color: colors.background }]}>
+            ⊕ CRIAR JOGO
+          </Text>
         </Pressable>
 
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}
           onPress={() => router.push('/join')}
         >
-          <Text style={styles.secondaryButtonText}>⊞ ENTRAR NUM JOGO</Text>
+          <Text style={[styles.secondaryButtonText, { color: colors.text }]}>
+            ⊞ ENTRAR NUM JOGO
+          </Text>
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
     padding: Spacing.xl,
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  themeToggle: {
+    position: 'absolute',
+    top: Spacing.xxl,
+    right: Spacing.lg,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  themeToggleIcon: {
+    fontSize: 20,
+  },
   checkingLabel: {
     ...Typography.caption,
-    color: Colors.textMuted,
     marginTop: Spacing.md,
     letterSpacing: 2,
   },
@@ -92,25 +132,21 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 20,
-    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: Spacing.lg,
   },
   logoText: {
     fontSize: 48,
-    color: Colors.background,
   },
   title: {
     ...Typography.title,
     fontSize: 40,
-    color: Colors.text,
     letterSpacing: 4,
     marginBottom: Spacing.xs,
   },
   tagline: {
     ...Typography.caption,
-    color: Colors.textMuted,
     letterSpacing: 2,
   },
   buttons: {
@@ -119,27 +155,22 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.xl,
   },
   primaryButton: {
-    backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     alignItems: 'center',
   },
   primaryButtonText: {
     ...Typography.label,
-    color: Colors.background,
     letterSpacing: 1,
   },
   secondaryButton: {
-    backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   secondaryButtonText: {
     ...Typography.label,
-    color: Colors.text,
     letterSpacing: 1,
   },
   pressed: {

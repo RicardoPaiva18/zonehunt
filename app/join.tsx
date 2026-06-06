@@ -2,20 +2,21 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { subscribeToGame, subscribeToPlayers, joinGame } from '../lib/gameService';
-import { Colors, Spacing, Typography, GameConfig } from '../constants/theme';
+import { Spacing, Typography } from '../constants/theme';
 import type { Game, Player } from '../types/game';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../context/ThemeContext';
 
 export default function JoinGameScreen() {
+  const { colors } = useTheme();
   const [code, setCode] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [joining, setJoining] = useState(false);
 
-  // Quando o código tiver o comprimento certo, começa a espreitar o jogo em tempo real
   useEffect(() => {
     const normalized = code.trim().toUpperCase();
-    // Esperar código completo tipo G-XXX-XXXX (10 caracteres)
     if (normalized.length < 10) {
       setGame(null);
       setPlayers([]);
@@ -43,8 +44,8 @@ export default function JoinGameScreen() {
 
     setJoining(true);
     try {
-    await joinGame(code, playerName.trim());
-    router.replace(`/game/lobby?code=${code.trim().toUpperCase()}`);
+      await joinGame(code, playerName.trim());
+      router.replace(`/game/lobby?code=${code.trim().toUpperCase()}`);
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Algo correu mal.');
     } finally {
@@ -55,15 +56,19 @@ export default function JoinGameScreen() {
   const gameFound = game !== null;
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Entrar no Jogo</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.header, { color: colors.text }]}>Entrar no Jogo</Text>
 
       <View style={styles.form}>
-        <Text style={styles.label}>CÓDIGO DO JOGO</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>CÓDIGO DO JOGO</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, {
+            backgroundColor: colors.surface,
+            color: colors.text,
+            borderColor: colors.border,
+          }]}
           placeholder="G-XXX-XXXX"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={code}
           onChangeText={(v) => setCode(v.toUpperCase())}
           autoCapitalize="characters"
@@ -71,18 +76,28 @@ export default function JoinGameScreen() {
         />
 
         {gameFound && game && (
-          <View style={styles.gameCard}>
-            <Text style={styles.gameCardLabel}>JOGO ENCONTRADO</Text>
-            <Text style={styles.gameCardName}>{game.name}</Text>
+          <View style={[styles.gameCard, {
+            backgroundColor: colors.surface,
+            borderColor: colors.primary,
+          }]}>
+            <Text style={[styles.gameCardLabel, { color: colors.primary }]}>
+              JOGO ENCONTRADO
+            </Text>
+            <Text style={[styles.gameCardName, { color: colors.text }]}>
+              {game.name}
+            </Text>
             <View style={styles.gameCardRow}>
-              <Text style={styles.gameCardMeta}>JOGADORES:  {players.length}/{game.maxPlayers}</Text>
+              <Text style={[styles.gameCardMeta, { color: colors.textSecondary }]}>
+                JOGADORES:  {players.length}/{game.maxPlayers}
+              </Text>
               <View style={styles.playerDots}>
                 {Array.from({ length: game.maxPlayers }, (_, i) => (
                   <View
                     key={i}
                     style={[
                       styles.playerDot,
-                      i < players.length && styles.playerDotFilled,
+                      { borderColor: colors.textMuted },
+                      i < players.length && { backgroundColor: colors.primary, borderColor: colors.primary },
                     ]}
                   />
                 ))}
@@ -91,11 +106,15 @@ export default function JoinGameScreen() {
           </View>
         )}
 
-        <Text style={styles.label}>O TEU NOME</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>O TEU NOME</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, {
+            backgroundColor: colors.surface,
+            color: colors.text,
+            borderColor: colors.border,
+          }]}
           placeholder="Username"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={playerName}
           onChangeText={setPlayerName}
           maxLength={20}
@@ -104,16 +123,21 @@ export default function JoinGameScreen() {
 
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}
           onPress={() => router.back()}
           disabled={joining}
         >
-          <Text style={styles.secondaryButtonText}>VOLTAR</Text>
+          <Text style={[styles.secondaryButtonText, { color: colors.text }]}>VOLTAR</Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [
             styles.primaryButton,
+            { backgroundColor: colors.primary },
             pressed && styles.pressed,
             (joining || !gameFound) && styles.disabled,
           ]}
@@ -121,25 +145,25 @@ export default function JoinGameScreen() {
           disabled={joining || !gameFound}
         >
           {joining ? (
-            <ActivityIndicator color={Colors.background} />
+            <ActivityIndicator color={colors.background} />
           ) : (
-            <Text style={styles.primaryButtonText}>ENTRAR →</Text>
+            <Text style={[styles.primaryButtonText, { color: colors.background }]}>
+              ENTRAR →
+            </Text>
           )}
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
     padding: Spacing.lg,
   },
   header: {
     ...Typography.heading,
-    color: Colors.text,
     marginBottom: Spacing.xl,
   },
   form: {
@@ -148,37 +172,29 @@ const styles = StyleSheet.create({
   },
   label: {
     ...Typography.caption,
-    color: Colors.textMuted,
     letterSpacing: 1,
     marginTop: Spacing.sm,
   },
   input: {
-    backgroundColor: Colors.surface,
     borderRadius: 8,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
-    color: Colors.text,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   gameCard: {
-    backgroundColor: Colors.surface,
     borderRadius: 8,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.primary,
     marginTop: Spacing.sm,
     gap: Spacing.xs,
   },
   gameCardLabel: {
     ...Typography.caption,
-    color: Colors.primary,
     letterSpacing: 1,
   },
   gameCardName: {
     ...Typography.heading,
-    color: Colors.text,
     fontSize: 20,
   },
   gameCardRow: {
@@ -189,7 +205,6 @@ const styles = StyleSheet.create({
   },
   gameCardMeta: {
     ...Typography.caption,
-    color: Colors.textSecondary,
     letterSpacing: 1,
   },
   playerDots: {
@@ -201,11 +216,6 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: Colors.textMuted,
-  },
-  playerDotFilled: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   footer: {
     flexDirection: 'row',
@@ -214,7 +224,6 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     alignItems: 'center',
@@ -222,22 +231,18 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...Typography.label,
-    color: Colors.background,
     letterSpacing: 1,
   },
   secondaryButton: {
     flex: 1,
-    backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   secondaryButtonText: {
     ...Typography.label,
-    color: Colors.text,
     letterSpacing: 1,
   },
   pressed: { opacity: 0.7 },

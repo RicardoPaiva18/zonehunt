@@ -1,19 +1,34 @@
-import { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert, ActivityIndicator, Platform } from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import { MapView, Marker, PROVIDER_GOOGLE, Polygon } from '../../components/PlatformMap';
-import * as Location from 'expo-location';
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
+  ActivityIndicator,
+  Alert,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
+import {
+  MapView,
+  Marker,
+  PROVIDER_GOOGLE,
+  Polygon,
+} from "../../components/PlatformMap";
+import * as Location from "expo-location";
+import { Spacing, Typography } from "../../constants/theme";
+import {
+  confirmGameArea,
+  leaveGame,
   subscribeToGame,
   subscribeToPlayers,
-  leaveGame,
-  updatePlayerLocation,
   updateGameArea,
-  confirmGameArea,        
-} from '../../lib/gameService';
-import { getPlayerId } from '../../lib/playerIdentity';
-import { Colors, Spacing, Typography } from '../../constants/theme';
-import type { Game, Player } from '../../types/game';
+  updatePlayerLocation,
+} from "../../lib/gameService";
+import { getPlayerId } from "../../lib/playerIdentity";
+import type { Game, Player } from "../../types/game";
+import { useTheme } from "../../context/ThemeContext";
 
 const MIN_AREA_POINTS = 3;
 const MAX_AREA_POINTS = 8;
@@ -24,6 +39,7 @@ type LocationCoords = {
 };
 
 export default function AreaScreen() {
+  const { colors, mapStyle } = useTheme();
   const { code } = useLocalSearchParams<{ code: string }>();
   const [game, setGame] = useState<Game | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -34,22 +50,18 @@ export default function AreaScreen() {
   const [saving, setSaving] = useState(false);
   const mapRef = useRef<any>(null);
 
-  // Carregar o ID do jogador
   useEffect(() => {
     getPlayerId().then(setCurrentUserId);
   }, []);
 
-  // Subscrever ao jogo e jogadores
   useEffect(() => {
     if (!code) return;
     const unsubGame = subscribeToGame(code, (g) => {
       setGame(g);
-      // Quando o admin confirmar a área, todos navegam para colocar bonecos
       if (g?.areaConfirmed && code) {
         router.replace(`/game/place?code=${code}`);
       }
     });
-
     const unsubPlayers = subscribeToPlayers(code, setPlayers);
     return () => {
       unsubGame();
@@ -57,15 +69,13 @@ export default function AreaScreen() {
     };
   }, [code]);
 
-  // GPS (só em mobile)
   useEffect(() => {
-    if (Platform.OS === 'web') return;
-
+    if (Platform.OS === "web") return;
     let watcher: Location.LocationSubscription | null = null;
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
+      if (status !== "granted") {
         setPermissionDenied(true);
         return;
       }
@@ -78,72 +88,50 @@ export default function AreaScreen() {
         longitude: initial.coords.longitude,
       };
       setMyLocation(coords);
-      mapRef.current?.animateToRegion({
-        ...coords,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      }, 1000);
+      mapRef.current?.animateToRegion(
+        { ...coords, latitudeDelta: 0.005, longitudeDelta: 0.005 },
+        1000,
+      );
 
       watcher = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          distanceInterval: 2,
-          timeInterval: 3000,
-        },
+        { accuracy: Location.Accuracy.High, distanceInterval: 2, timeInterval: 3000 },
         (pos) => {
           const newCoords = {
             latitude: pos.coords.latitude,
             longitude: pos.coords.longitude,
           };
           setMyLocation(newCoords);
-          if (code) {
-            updatePlayerLocation(code, newCoords).catch(console.error);
-          }
-        }
+          if (code) updatePlayerLocation(code, newCoords).catch(console.error);
+        },
       );
     })();
 
-    return () => {
-      watcher?.remove();
-    };
+    return () => { watcher?.remove(); };
   }, [code]);
 
   const isAdmin = game?.adminId === currentUserId;
   const areaDefined = !!game?.areaConfirmed;
-
-  // O polígono que aparece no mapa é o que está no Firestore (sincronizado entre todos)
-  // Para o admin enquanto desenha, é o draft local
   const polygonToShow = isAdmin && !areaDefined ? draftArea : (game?.area ?? []);
 
-  // Admin toca no mapa → adiciona vértice
   const handleMapPress = (event: any) => {
     if (!isAdmin || areaDefined) return;
     if (draftArea.length >= MAX_AREA_POINTS) return;
-
     const { latitude, longitude } = event.nativeEvent.coordinate;
     const newArea = [...draftArea, { latitude, longitude }];
     setDraftArea(newArea);
-
-    // Publicar em tempo real para os outros verem
-    if (code) {
-      updateGameArea(code, newArea).catch(console.error);
-    }
+    if (code) updateGameArea(code, newArea).catch(console.error);
   };
 
   const handleUndo = () => {
     if (draftArea.length === 0) return;
     const newArea = draftArea.slice(0, -1);
     setDraftArea(newArea);
-    if (code) {
-      updateGameArea(code, newArea.length > 0 ? newArea : null).catch(console.error);
-    }
+    if (code) updateGameArea(code, newArea.length > 0 ? newArea : null).catch(console.error);
   };
 
   const handleClear = () => {
     setDraftArea([]);
-    if (code) {
-      updateGameArea(code, null).catch(console.error);
-    }
+    if (code) updateGameArea(code, null).catch(console.error);
   };
 
   const handleConfirmArea = async () => {
@@ -151,10 +139,8 @@ export default function AreaScreen() {
     setSaving(true);
     try {
       await confirmGameArea(code);
-      // Ficar no mesmo ecrã por agora — a próxima fase (colocar bonecos)
-      // vem a seguir. O botão vai ficar desativado a partir deste ponto.
     } catch (error: any) {
-      Alert.alert('Erro', error.message ?? 'Não foi possível confirmar a área.');
+      Alert.alert("Erro", error.message ?? "Não foi possível confirmar a área.");
       setSaving(false);
     }
   };
@@ -162,59 +148,62 @@ export default function AreaScreen() {
   const confirmLeave = () => {
     const performLeave = async () => {
       if (code) await leaveGame(code);
-      router.replace('/');
+      router.replace("/");
     };
-
-    if (Platform.OS === 'web') {
-      if (window.confirm('Tens a certeza que queres sair do jogo?')) {
-        performLeave();
-      }
+    if (Platform.OS === "web") {
+      if (window.confirm("Tens a certeza que queres sair do jogo?")) performLeave();
       return;
     }
-
-    Alert.alert(
-      'Sair do jogo',
-      'Tens a certeza que queres sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sair', style: 'destructive', onPress: performLeave },
-      ],
-    );
+    Alert.alert("Sair do jogo", "Tens a certeza que queres sair?", [
+      { text: "Cancelar", style: "cancel" },
+      { text: "Sair", style: "destructive", onPress: performLeave },
+    ]);
   };
 
-  // Estados de carregamento
   if (!code || !game) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>A carregar jogo...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          A carregar jogo...
+        </Text>
       </View>
     );
   }
 
   if (permissionDenied) {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorTitle}>Sem permissão de localização</Text>
-        <Text style={styles.errorMessage}>
-          O ZoneHunt precisa da tua localização para funcionar. Ativa nas definições do telemóvel.
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorTitle, { color: colors.error }]}>
+          Sem permissão de localização
         </Text>
-        <Pressable style={styles.errorButton} onPress={confirmLeave}>
-          <Text style={styles.errorButtonText}>SAIR DO JOGO</Text>
+        <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
+          O ZoneHunt precisa da tua localização para funcionar.
+        </Text>
+        <Pressable style={[styles.errorButton, {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        }]} onPress={confirmLeave}>
+          <Text style={[styles.errorButtonText, { color: colors.text }]}>SAIR DO JOGO</Text>
         </Pressable>
       </View>
     );
   }
 
-  if (Platform.OS === 'web') {
+  if (Platform.OS === "web") {
     return (
-      <View style={styles.loadingContainer}>
-        <Text style={styles.errorTitle}>Mapa não disponível em web</Text>
-        <Text style={styles.errorMessage}>
-          Esta fase do jogo requer GPS e mapa nativo. Abre a app num telemóvel para continuar.
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <Text style={[styles.errorTitle, { color: colors.error }]}>
+          Mapa não disponível em web
         </Text>
-        <Pressable style={styles.errorButton} onPress={confirmLeave}>
-          <Text style={styles.errorButtonText}>SAIR DO JOGO</Text>
+        <Text style={[styles.errorMessage, { color: colors.textSecondary }]}>
+          Esta fase do jogo requer GPS e mapa nativo.
+        </Text>
+        <Pressable style={[styles.errorButton, {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+        }]} onPress={confirmLeave}>
+          <Text style={[styles.errorButtonText, { color: colors.text }]}>SAIR DO JOGO</Text>
         </Pressable>
       </View>
     );
@@ -222,18 +211,19 @@ export default function AreaScreen() {
 
   if (!myLocation) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator color={Colors.primary} size="large" />
-        <Text style={styles.loadingText}>A obter localização...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator color={colors.primary} size="large" />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          A obter localização...
+        </Text>
       </View>
     );
   }
 
-  // Instrução contextual para o admin
-  let instruction = '';
+  let instruction = "";
   if (isAdmin) {
     if (draftArea.length === 0) {
-      instruction = 'TOCA NO MAPA PARA DEFINIR OS VÉRTICES DA ÁREA';
+      instruction = "TOCA NO MAPA PARA DEFINIR OS VÉRTICES DA ÁREA";
     } else if (draftArea.length < MIN_AREA_POINTS) {
       instruction = `PRECISAS DE PELO MENOS ${MIN_AREA_POINTS} PONTOS  (${draftArea.length}/${MIN_AREA_POINTS})`;
     } else if (draftArea.length < MAX_AREA_POINTS) {
@@ -242,20 +232,24 @@ export default function AreaScreen() {
       instruction = `MÁXIMO DE ${MAX_AREA_POINTS} PONTOS ATINGIDO`;
     }
   } else {
-    instruction = 'À ESPERA QUE O ADMIN DEFINA A ÁREA';
+    instruction = "À ESPERA QUE O ADMIN DEFINA A ÁREA";
   }
 
   const canConfirm = isAdmin && draftArea.length >= MIN_AREA_POINTS;
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Definir Área</Text>
-        {isAdmin && <Text style={styles.adminBadge}>ADMIN</Text>}
+        <Text style={[styles.title, { color: colors.text }]}>Definir Área</Text>
+        {isAdmin && (
+          <Text style={[styles.adminBadge, { color: colors.primary }]}>ADMIN</Text>
+        )}
       </View>
 
       <View style={styles.instructionBar}>
-        <Text style={styles.instructionText}>{instruction}</Text>
+        <Text style={[styles.instructionText, { color: colors.primary }]}>
+          {instruction}
+        </Text>
       </View>
 
       <MapView
@@ -270,10 +264,9 @@ export default function AreaScreen() {
         }}
         showsUserLocation
         showsMyLocationButton={false}
-        customMapStyle={darkMapStyle}
+        customMapStyle={mapStyle}
         onPress={handleMapPress}
       >
-        {/* Pins dos outros jogadores */}
         {players
           .filter((p) => p.location && p.id !== currentUserId)
           .map((p) => (
@@ -285,21 +278,19 @@ export default function AreaScreen() {
             />
           ))}
 
-        {/* Vértices da área a desenhar */}
         {polygonToShow.map((point, index) => (
           <Marker
             key={`v-${index}`}
             coordinate={point}
-            pinColor={Colors.primary}
+            pinColor={colors.primary}
             title={`Vértice ${index + 1}`}
           />
         ))}
 
-        {/* O polígono em si, quando há >= 3 pontos */}
         {polygonToShow.length >= MIN_AREA_POINTS && (
           <Polygon
             coordinates={polygonToShow}
-            strokeColor={Colors.primary}
+            strokeColor={colors.primary}
             strokeWidth={2}
             fillColor="rgba(74, 222, 128, 0.2)"
           />
@@ -312,207 +303,149 @@ export default function AreaScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.smallButton,
+                { backgroundColor: colors.surface, borderColor: colors.border },
                 pressed && styles.pressed,
                 draftArea.length === 0 && styles.disabled,
               ]}
               onPress={handleUndo}
               disabled={draftArea.length === 0}
             >
-              <Text style={styles.smallButtonText}>← DESFAZER</Text>
+              <Text style={[styles.smallButtonText, { color: colors.text }]}>
+                ← DESFAZER
+              </Text>
             </Pressable>
 
             <Pressable
               style={({ pressed }) => [
                 styles.smallButton,
+                { backgroundColor: colors.surface, borderColor: colors.border },
                 pressed && styles.pressed,
                 draftArea.length === 0 && styles.disabled,
               ]}
               onPress={handleClear}
               disabled={draftArea.length === 0}
             >
-              <Text style={styles.smallButtonText}>✕ LIMPAR</Text>
+              <Text style={[styles.smallButtonText, { color: colors.text }]}>
+                ✕ LIMPAR
+              </Text>
             </Pressable>
           </View>
         )}
 
         <View style={styles.mainButtons}>
           <Pressable
-            style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              styles.secondaryButton,
+              { backgroundColor: colors.surface, borderColor: colors.border },
+              pressed && styles.pressed,
+            ]}
             onPress={confirmLeave}
           >
-            <Text style={styles.secondaryButtonText}>SAIR</Text>
+            <Text style={[styles.secondaryButtonText, { color: colors.text }]}>SAIR</Text>
           </Pressable>
 
           {isAdmin ? (
             <Pressable
               style={({ pressed }) => [
                 styles.primaryButton,
+                { backgroundColor: colors.primary },
                 pressed && styles.pressed,
                 (!canConfirm || saving) && styles.disabled,
               ]}
               onPress={handleConfirmArea}
               disabled={!canConfirm || saving}
             >
-              <Text style={styles.primaryButtonText}>
-                {canConfirm ? 'CONFIRMAR ÁREA →' : 'DEFINE ÁREA PRIMEIRO'}
+              <Text style={[styles.primaryButtonText, { color: colors.background }]}>
+                {canConfirm ? "CONFIRMAR ÁREA →" : "DEFINE ÁREA PRIMEIRO"}
               </Text>
             </Pressable>
           ) : (
-            <View style={[styles.primaryButton, styles.disabled]}>
-              <Text style={styles.primaryButtonText}>AGUARDAR ADMIN...</Text>
+            <View style={[styles.primaryButton, { backgroundColor: colors.primary }, styles.disabled]}>
+              <Text style={[styles.primaryButtonText, { color: colors.background }]}>
+                AGUARDAR ADMIN...
+              </Text>
             </View>
           )}
         </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 function getPlayerColorHex(color: string): string {
-  const colors: Record<string, string> = {
-    green: '#4ade80',
-    orange: '#fb923c',
-    blue: '#60a5fa',
-    purple: '#c084fc',
-    red: '#f87171',
-    yellow: '#fbbf24',
-    pink: '#f472b6',
-    cyan: '#22d3ee',
+  const map: Record<string, string> = {
+    green: "#4ade80",
+    orange: "#fb923c",
+    blue: "#60a5fa",
+    purple: "#c084fc",
+    red: "#f87171",
+    yellow: "#fbbf24",
+    pink: "#f472b6",
+    cyan: "#22d3ee",
   };
-  return colors[color] ?? '#71717a';
+  return map[color] ?? "#71717a";
 }
 
-const darkMapStyle = [
-  { elementType: 'geometry', stylers: [{ color: '#0a0a0a' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#0a0a0a' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#746855' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#27272a' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#212a37' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#17263c' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#1a1a1a' }] },
-];
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { flex: 1 },
   loadingContainer: {
     flex: 1,
-    backgroundColor: Colors.background,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: Spacing.lg,
     gap: Spacing.md,
   },
-  loadingText: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    marginTop: Spacing.md,
-  },
-  errorTitle: {
-    ...Typography.heading,
-    color: Colors.error,
-    textAlign: 'center',
-  },
-  errorMessage: {
-    ...Typography.body,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
+  loadingText: { ...Typography.body, marginTop: Spacing.md },
+  errorTitle: { ...Typography.heading, textAlign: "center" },
+  errorMessage: { ...Typography.body, textAlign: "center" },
   errorButton: {
-    backgroundColor: Colors.surface,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
     marginTop: Spacing.lg,
   },
-  errorButtonText: {
-    ...Typography.label,
-    color: Colors.text,
-    letterSpacing: 1,
-  },
+  errorButtonText: { ...Typography.label, letterSpacing: 1 },
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     padding: Spacing.lg,
     paddingBottom: 0,
   },
-  title: {
-    ...Typography.heading,
-    color: Colors.text,
-  },
-  adminBadge: {
-    ...Typography.caption,
-    color: Colors.primary,
-    letterSpacing: 1,
-    fontWeight: 'bold',
-  },
-  instructionBar: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.sm,
-  },
-  instructionText: {
-    ...Typography.caption,
-    color: Colors.primary,
-    letterSpacing: 1,
-    textAlign: 'center',
-  },
+  title: { ...Typography.heading },
+  adminBadge: { ...Typography.caption, letterSpacing: 1, fontWeight: "bold" },
+  instructionBar: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm },
+  instructionText: { ...Typography.caption, letterSpacing: 1, textAlign: "center" },
   map: { flex: 1 },
-  footer: {
-    padding: Spacing.lg,
-    gap: Spacing.sm,
-  },
-  adminButtons: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
+  footer: { padding: Spacing.lg, gap: Spacing.sm },
+  adminButtons: { flexDirection: "row", gap: Spacing.sm },
   smallButton: {
     flex: 1,
-    backgroundColor: Colors.surface,
     paddingVertical: Spacing.sm,
     borderRadius: 8,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  smallButtonText: {
-    ...Typography.caption,
-    color: Colors.text,
-    letterSpacing: 1,
-  },
-  mainButtons: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
+  smallButtonText: { ...Typography.caption, letterSpacing: 1 },
+  mainButtons: { flexDirection: "row", gap: Spacing.sm },
   primaryButton: {
     flex: 2,
-    backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  primaryButtonText: {
-    ...Typography.label,
-    color: Colors.background,
-    letterSpacing: 1,
-  },
+  primaryButtonText: { ...Typography.label, letterSpacing: 1 },
   secondaryButton: {
     flex: 1,
-    backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
     borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  secondaryButtonText: {
-    ...Typography.label,
-    color: Colors.text,
-    letterSpacing: 1,
-  },
+  secondaryButtonText: { ...Typography.label, letterSpacing: 1 },
   pressed: { opacity: 0.7 },
   disabled: { opacity: 0.5 },
 });

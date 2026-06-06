@@ -1,16 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { createGame } from '../lib/gameService';
-import { Colors, Spacing, Typography, GameConfig } from '../constants/theme';
+import { Spacing, Typography, GameConfig } from '../constants/theme';
+import { useTheme } from '../context/ThemeContext';
 
 export default function CreateGameScreen() {
+  const { colors } = useTheme();
   const [gameName, setGameName] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [maxPlayers, setMaxPlayers] = useState(4);
-  const [gameCode, setGameCode] = useState('');
   const [creating, setCreating] = useState(false);
-
 
   const handleCreate = async () => {
     if (!gameName.trim()) {
@@ -24,8 +25,8 @@ export default function CreateGameScreen() {
 
     setCreating(true);
     try {
-    const { code } = await createGame(gameName.trim(), maxPlayers, playerName.trim());
-    router.replace(`/game/lobby?code=${code}`);
+      const { code } = await createGame(gameName.trim(), maxPlayers, playerName.trim());
+      router.replace(`/game/lobby?code=${code}`);
     } catch (error: any) {
       Alert.alert('Erro', error.message ?? 'Algo correu mal.');
     } finally {
@@ -34,31 +35,39 @@ export default function CreateGameScreen() {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.header}>Criar Jogo</Text>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.header, { color: colors.text }]}>Criar Jogo</Text>
 
       <View style={styles.form}>
-        <Text style={styles.label}>NOME DO JOGO</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>NOME DO JOGO</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, {
+            backgroundColor: colors.surface,
+            color: colors.text,
+            borderColor: colors.border,
+          }]}
           placeholder="ex: Jogo 1"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={gameName}
           onChangeText={setGameName}
           maxLength={30}
         />
 
-        <Text style={styles.label}>O TEU NOME</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>O TEU NOME</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, {
+            backgroundColor: colors.surface,
+            color: colors.text,
+            borderColor: colors.border,
+          }]}
           placeholder="Username"
-          placeholderTextColor={Colors.textMuted}
+          placeholderTextColor={colors.textMuted}
           value={playerName}
           onChangeText={setPlayerName}
           maxLength={20}
         />
 
-        <Text style={styles.label}>Nº DE JOGADORES</Text>
+        <Text style={[styles.label, { color: colors.textMuted }]}>Nº DE JOGADORES</Text>
         <View style={styles.playerCount}>
           {Array.from({ length: GameConfig.MAX_PLAYERS }, (_, i) => i + 1).map((n) => (
             <Pressable
@@ -66,26 +75,34 @@ export default function CreateGameScreen() {
               onPress={() => setMaxPlayers(n)}
               style={[
                 styles.playerDot,
-                maxPlayers >= n && styles.playerDotFilled,
+                { borderColor: colors.textMuted },
+                maxPlayers >= n && { backgroundColor: colors.primary, borderColor: colors.primary },
               ]}
             />
           ))}
-          <Text style={styles.playerCountLabel}>{maxPlayers}/{GameConfig.MAX_PLAYERS}</Text>
+          <Text style={[styles.playerCountLabel, { color: colors.text }]}>
+            {maxPlayers}/{GameConfig.MAX_PLAYERS}
+          </Text>
         </View>
       </View>
 
       <View style={styles.footer}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.pressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+            pressed && styles.pressed,
+          ]}
           onPress={() => router.back()}
           disabled={creating}
         >
-          <Text style={styles.secondaryButtonText}>VOLTAR</Text>
+          <Text style={[styles.secondaryButtonText, { color: colors.text }]}>VOLTAR</Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [
             styles.primaryButton,
+            { backgroundColor: colors.primary },
             pressed && styles.pressed,
             creating && styles.disabled,
           ]}
@@ -93,25 +110,23 @@ export default function CreateGameScreen() {
           disabled={creating}
         >
           {creating ? (
-            <ActivityIndicator color={Colors.background} />
+            <ActivityIndicator color={colors.background} />
           ) : (
-            <Text style={styles.primaryButtonText}>CRIAR →</Text>
+            <Text style={[styles.primaryButtonText, { color: colors.background }]}>CRIAR →</Text>
           )}
         </Pressable>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
     padding: Spacing.lg,
   },
   header: {
     ...Typography.heading,
-    color: Colors.text,
     marginBottom: Spacing.xl,
   },
   form: {
@@ -120,19 +135,15 @@ const styles = StyleSheet.create({
   },
   label: {
     ...Typography.caption,
-    color: Colors.textMuted,
     letterSpacing: 1,
     marginTop: Spacing.sm,
   },
   input: {
-    backgroundColor: Colors.surface,
     borderRadius: 8,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.md,
-    color: Colors.text,
     fontSize: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   playerCount: {
     flexDirection: 'row',
@@ -145,15 +156,9 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 7,
     borderWidth: 1,
-    borderColor: Colors.textMuted,
-  },
-  playerDotFilled: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
   },
   playerCountLabel: {
     ...Typography.label,
-    color: Colors.text,
     marginLeft: Spacing.md,
   },
   footer: {
@@ -163,7 +168,6 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     flex: 1,
-    backgroundColor: Colors.primary,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     alignItems: 'center',
@@ -171,22 +175,18 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     ...Typography.label,
-    color: Colors.background,
     letterSpacing: 1,
   },
   secondaryButton: {
     flex: 1,
-    backgroundColor: Colors.surface,
     paddingVertical: Spacing.md,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
   },
   secondaryButtonText: {
     ...Typography.label,
-    color: Colors.text,
     letterSpacing: 1,
   },
   pressed: { opacity: 0.7 },
